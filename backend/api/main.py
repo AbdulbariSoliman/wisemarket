@@ -1,27 +1,50 @@
 import logging
+import os
 import time
 from contextlib import asynccontextmanager
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 
-from fastapi import FastAPI, HTTPException
+import sentry_sdk
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 from backend.api.db import get_supabase_client
+from backend.config.stores import PUBLIC_STORES
 from backend.normalizer.ontology_loader import load_ontology
 from backend.services.decision_engine import DecisionEngine
 from backend.services.ingredient_parser import IngredientParser
 from backend.services.ontology_matcher import OntologyMatcher
 from backend.services.ontology_router import OntologyRouter
 
+sentry_sdk.init(
+    dsn=os.environ.get("SENTRY_DSN"),
+    traces_sample_rate=0.2,
+    send_default_pii=False,
+)
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+limiter = Limiter(key_func=get_remote_address)
+
+
+class PriceInfo(BaseModel):
+    amount: Optional[float]
+    currency: Optional[str]
+    unit_price: Optional[float]
+    price_date: Optional[str]
+    promotion_info: Optional[Dict]
 
 
 class ProductAnalysis(BaseModel):
     gtin: str
     store: Optional[str]
-    name_en: Optional[str]
+    name: Optional[str]
     category: str
+    price: Optional[PriceInfo]
     ingredients_raw: str
     ingredients_parsed: List[str]
     ontology_groups: List[str]
@@ -32,7 +55,7 @@ class ProductAnalysis(BaseModel):
 class ProductWarning(BaseModel):
     gtin: Optional[str]
     store: Optional[str]
-    name_en: Optional[str]
+    name: Optional[str]
     category: str
     ingredients_raw: str
     ingredients_parsed: List[str]
@@ -43,21 +66,32 @@ def _validate_gtin(gtin: str) -> None:
     if not gtin.isdigit() or len(gtin) not in (8, 13, 14):
         raise HTTPException(
             status_code=422,
-            detail="Invalid GTIN format — must be 8, 13, or 14 digits",
+            detail="Invalid GTIN format - must be 8, 13, or 14 digits",
         )
 
 
-def _normalize_db_ingredients(value: Any) -> List[str]:
+def _normalize_db_ingredients(value: Any, lang: str = "en") -> List[str]:
     if isinstance(value, list):
         return [str(x).strip().lower() for x in value if str(x).strip()]
-
     if isinstance(value, dict):
-        for lang in ("en", "de", "fr", "it"):
-            lang_value = value.get(lang)
-            if isinstance(lang_value, list):
-                return [str(x).strip().lower() for x in lang_value if str(x).strip()]
-
+        lang_value = value.get(lang)
+        if isinstance(lang_value, list):
+            return [str(x).strip().lower() for x in lang_value if str(x).strip()]
+        for fallback in ("en", "de", "fr", "it"):
+            fallback_value = value.get(fallback)
+            if isinstance(fallback_value, list):
+                return [str(x).strip().lower() for x in fallback_value if str(x).strip()]
     return []
+
+
+def _get_product_name(product: Dict, lang: str) -> Optional[str]:
+    return (
+        product.get(f"name_{lang}")
+        or product.get("name_en")
+        or product.get("name_de")
+        or product.get("name_fr")
+        or product.get("name_it")
+    )
 
 
 @asynccontextmanager
@@ -65,21 +99,17 @@ async def lifespan(app: FastAPI):
     logger.info("Loading ontology and services...")
     try:
         ontology_data = load_ontology()
-
         app.state.ontology_data = ontology_data
         app.state.parser = IngredientParser()
         app.state.router = OntologyRouter()
         app.state.matcher = OntologyMatcher(ontology_data)
         app.state.decision_engine = DecisionEngine()
-
         logger.info("All services loaded successfully.")
     except Exception as e:
         logger.exception("Startup failed")
         raise RuntimeError(f"Startup failed: {e}") from e
-
     yield
-
-    logger.info("App shutdown — cleaning up state...")
+    logger.info("App shutdown - cleaning up state...")
     for attr in ("ontology_data", "parser", "router", "matcher", "decision_engine"):
         if hasattr(app.state, attr):
             delattr(app.state, attr)
@@ -87,16 +117,19 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Swiss Basket AI",
+    title="WiseMarket",
     version="1.0.0",
-    description="Analyzes Swiss grocery products against ontology rules.",
+    description="Switzerland's smartest shopping assistant.",
     lifespan=lifespan,
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 @app.get("/")
 def root():
-    return {"message": "Swiss Basket AI API is running"}
+    return {"message": "WiseMarket API is running"}
 
 
 @app.get("/health")
@@ -114,8 +147,18 @@ def health():
     }
 
 
+@app.get("/sentry-debug")
+async def trigger_error():
+    division_by_zero = 1 / 0
+
+
 @app.get("/analyze/{gtin}", response_model=Union[ProductAnalysis, ProductWarning])
-def analyze_product(gtin: str):
+@limiter.limit("60/minute")
+def analyze_product(
+    request: Request,
+    gtin: str,
+    lang: Literal["en", "de", "fr", "it"] = "en",
+):
     start = time.perf_counter()
     _validate_gtin(gtin)
 
@@ -136,23 +179,52 @@ def analyze_product(gtin: str):
         raise HTTPException(status_code=404, detail=f"Product with GTIN {gtin} not found")
 
     product = resp.data[0]
+
+    store = product.get("store", "").lower()
+    if store not in PUBLIC_STORES:
+        raise HTTPException(status_code=403, detail="This product is not available yet")
+
     raw_ingredients = product.get("ingredients_raw") or ""
     category = product.get("category") or ""
+    name = _get_product_name(product, lang)
 
-    parsed_ingredients = _normalize_db_ingredients(product.get("ingredients_normalized"))
+    price_info = None
+    try:
+        price_resp = (
+            supabase.table("product_prices")
+            .select("*")
+            .eq("product_id", product.get("id"))
+            .order("price_date", desc=True)
+            .limit(1)
+            .execute()
+        )
+        if price_resp.data:
+            p = price_resp.data[0]
+            price_info = PriceInfo(
+                amount=p.get("price"),
+                currency=p.get("currency"),
+                unit_price=p.get("unit_price"),
+                price_date=p.get("price_date"),
+                promotion_info=p.get("promotion_info"),
+            )
+    except Exception as e:
+        logger.warning("Price fetch failed for GTIN %s: %s", gtin, e)
+
+    parsed_ingredients = _normalize_db_ingredients(
+        product.get("ingredients_normalized"), lang=lang
+    )
 
     if not parsed_ingredients:
         if not raw_ingredients.strip():
             return ProductWarning(
                 gtin=product.get("gtin"),
                 store=product.get("store"),
-                name_en=product.get("name_en"),
+                name=name,
                 category=category,
                 ingredients_raw="",
                 ingredients_parsed=[],
                 warning="No ingredients available for this product",
             )
-
         try:
             parsed_ingredients = app.state.parser.normalize(raw_ingredients)
         except Exception as e:
@@ -162,7 +234,7 @@ def analyze_product(gtin: str):
     try:
         groups = app.state.router.route(category)
     except Exception as e:
-        logger.exception("Routing failed for category '%s'", category)
+        logger.exception("Routing failed for category %s", category)
         raise HTTPException(status_code=500, detail="Ontology routing failed") from e
 
     try:
@@ -178,13 +250,14 @@ def analyze_product(gtin: str):
         raise HTTPException(status_code=500, detail="Decision evaluation failed") from e
 
     elapsed = time.perf_counter() - start
-    logger.info("Analyzed GTIN %s successfully in %.3fs", gtin, elapsed)
+    logger.info("Analyzed GTIN %s in %.3fs", gtin, elapsed)
 
     return ProductAnalysis(
         gtin=product.get("gtin"),
         store=product.get("store"),
-        name_en=product.get("name_en"),
+        name=name,
         category=category,
+        price=price_info,
         ingredients_raw=raw_ingredients,
         ingredients_parsed=parsed_ingredients,
         ontology_groups=groups,
