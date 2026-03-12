@@ -1,24 +1,26 @@
 import logging
 import os
+import secrets
 import time
 from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Literal, Optional, Union
 
 import sentry_sdk
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from pydantic import BaseModel
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 from backend.api.db import get_supabase_client
-from backend.config.stores import PUBLIC_STORES
+from backend.config.stores import PUBLIC_STORES, STORES
 from backend.normalizer.ontology_loader import load_ontology
 from backend.services.decision_engine import DecisionEngine
 from backend.services.ingredient_parser import IngredientParser
 from backend.services.ontology_matcher import OntologyMatcher
 from backend.services.ontology_router import OntologyRouter
 
+# --- Sentry ---
 sentry_sdk.init(
     dsn=os.environ.get("SENTRY_DSN"),
     traces_sample_rate=0.2,
@@ -28,9 +30,23 @@ sentry_sdk.init(
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# --- Rate Limiter ---
 limiter = Limiter(key_func=get_remote_address)
 
 
+# --- Admin Auth ---
+def verify_admin_key(x_admin_key: str = Header(...)):
+    """
+    Protects admin routes with a secret key.
+    Uses constant-time comparison to prevent timing attacks.
+    Zero DB calls — pure in-memory check.
+    """
+    correct_key = os.environ.get("ADMIN_API_KEY", "")
+    if not x_admin_key or not secrets.compare_digest(x_admin_key, correct_key):
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
+
+# --- Response Models ---
 class PriceInfo(BaseModel):
     amount: Optional[float]
     currency: Optional[str]
@@ -62,6 +78,7 @@ class ProductWarning(BaseModel):
     warning: str
 
 
+# --- Helpers ---
 def _validate_gtin(gtin: str) -> None:
     if not gtin.isdigit() or len(gtin) not in (8, 13, 14):
         raise HTTPException(
@@ -94,6 +111,7 @@ def _get_product_name(product: Dict, lang: str) -> Optional[str]:
     )
 
 
+# --- Lifespan ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Loading ontology and services...")
@@ -116,6 +134,7 @@ async def lifespan(app: FastAPI):
     logger.info("Shutdown complete.")
 
 
+# --- App ---
 app = FastAPI(
     title="WiseMarket",
     version="1.0.0",
@@ -126,6 +145,10 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+
+# ================================
+# PUBLIC ROUTES — no auth needed
+# ================================
 
 @app.get("/")
 def root():
@@ -145,11 +168,6 @@ def health():
             "decision_engine": hasattr(app.state, "decision_engine"),
         },
     }
-
-
-@app.get("/sentry-debug")
-async def trigger_error():
-    division_by_zero = 1 / 0
 
 
 @app.get("/analyze/{gtin}", response_model=Union[ProductAnalysis, ProductWarning])
@@ -264,3 +282,43 @@ def analyze_product(
         matches=matches,
         verdicts=verdicts,
     )
+
+
+# ================================
+# ADMIN ROUTES — API key required
+# ================================
+
+@app.get("/admin/stats", dependencies=[Depends(verify_admin_key)])
+def admin_stats():
+    """
+    Returns store stats and system status.
+    Requires X-Admin-Key header.
+    """
+    return {
+        "status": "ok",
+        "stores": STORES,
+        "public_stores": PUBLIC_STORES,
+        "services": {
+            "ontology_data": hasattr(app.state, "ontology_data"),
+            "parser": hasattr(app.state, "parser"),
+            "router": hasattr(app.state, "router"),
+            "matcher": hasattr(app.state, "matcher"),
+            "decision_engine": hasattr(app.state, "decision_engine"),
+        },
+    }
+
+
+@app.get("/admin/health", dependencies=[Depends(verify_admin_key)])
+def admin_health():
+    """
+    Detailed health check for admin.
+    Requires X-Admin-Key header.
+    """
+    return {
+        "status": "ok",
+        "version": "1.0.0",
+        "public_stores": PUBLIC_STORES,
+        "ontology_loaded": hasattr(app.state, "ontology_data"),
+        "sentry_enabled": bool(os.environ.get("SENTRY_DSN")),
+        "admin_key_set": bool(os.environ.get("ADMIN_API_KEY")),
+    }
