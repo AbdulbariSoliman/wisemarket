@@ -2,7 +2,10 @@ import os
 import csv
 import json
 from datetime import datetime
+from dotenv import load_dotenv
 from supabase import create_client, Client
+
+load_dotenv()
 
 # -------------------------
 # Helpers
@@ -21,8 +24,12 @@ def safe_json(val):
 # -------------------------
 # Supabase
 # -------------------------
-SUPABASE_URL = "https://khwuiovgrblrixsindvj.supabase.co"
-SUPABASE_KEY = "sb_secret_UptPKeae7SkfkXNJKETRGg_vY2ywenB"
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise RuntimeError("SUPABASE_URL and SUPABASE_KEY are missing from .env")
+
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # -------------------------
@@ -78,7 +85,7 @@ for store in STORES:
                     "fr": row.get("ingredients_fr","").split(";"),
                     "it": row.get("ingredients_it","").split(";")
                 },
-                "ontology_tags": ontology_data,
+                "ontology_tags": list(ontology_data.keys()),
                 "allergens": row.get("allergens","").split(";"),
                 "nutrition": {
                     "per_100g": safe_json(row.get("nutrition_100g")),
@@ -122,7 +129,6 @@ for store in STORES:
 
             price_raw = row.get("price", "").strip()
 
-            # Skip header/bad rows
             if not price_raw or price_raw.lower() == "price":
                 print("⚠️ Skipping invalid price row:", row)
                 continue
@@ -141,3 +147,4 @@ for store in STORES:
             print(f"💰 Price added: {row.get('gtin')}")
 
 print("\n🎉 ETL COMPLETE")
+```

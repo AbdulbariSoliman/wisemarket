@@ -1,42 +1,27 @@
-import os
 import csv
+import os
+from typing import Dict, List
 
-# Absolute path to data/ontology
-ONTOLOGY_DIR = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "../../data/ontology")
-)
+BASE_DIR = "/workspaces/Swiss-Basket-AI/data/ontology"
 
-def load_ontologies():
-    ontologies = {}
 
-    for filename in os.listdir(ONTOLOGY_DIR):
-        if not filename.endswith(".csv"):
+def load_ontology(base_dir: str = BASE_DIR) -> Dict[str, List[dict]]:
+    ontology_data: Dict[str, List[dict]] = {}
+
+    for file in os.listdir(base_dir):
+        if not file.endswith(".csv"):
             continue
 
-        category = filename.replace(".csv", "")
-        path = os.path.join(ONTOLOGY_DIR, filename)
-
-        terms = []
-
+        path = os.path.join(base_dir, file)
         with open(path, newline="", encoding="utf-8") as f:
             reader = csv.DictReader(f)
-            for row in reader:
-                entry = {
-                    "term": row["term"].strip(),
-                    "en": [x.strip().lower() for x in row["en"].split(";") if x.strip()],
-                    "de": [x.strip().lower() for x in row["de"].split(";") if x.strip()],
-                    "fr": [x.strip().lower() for x in row["fr"].split(";") if x.strip()],
-                    "it": [x.strip().lower() for x in row["it"].split(";") if x.strip()],
-                }
-                terms.append(entry)
+            ontology_data[file.replace(".csv", "")] = list(reader)
 
-        ontologies[category] = terms
-
-    return ontologies
+    return ontology_data
 
 
 if __name__ == "__main__":
-    data = load_ontologies()
+    data = load_ontology()
     print(f"Loaded {len(data)} ontology categories")
-    for k, v in list(data.items())[:5]:
-        print(f"{k}: {len(v)} terms")
+    for key, rows in list(data.items())[:5]:
+        print(f"{key}: {len(rows)} rows")
