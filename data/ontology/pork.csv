@@ -1,5 +1,10 @@
 term,en,de,fr,it
-pork,pork,Schwein,porc,maiale
-bacon,bacon,Speck,bacon,bacon
-ham,ham,Schinken,jambon,prosciutto
-gelatine,pork gelatine,Schweinegelatine,gélatine porcine,gelatina suina
+pork,pork; pig; swine; porcine,Schwein; Schweinefleisch; Pork,porc; viande porcine,maiale; carne suina
+bacon,bacon; smoked bacon; streaky bacon,Speck; Frühstücksspeck; geräucherter Speck,bacon; lard fumé,bacon; pancetta affumicata
+ham,ham; prosciutto; serrano; parma ham; jamón,Schinken; Kochschinken; Rohschinken; Parmaschinken,jambon; jambon cru; jambon cuit; prosciutto,prosciutto; prosciutto cotto; prosciutto crudo
+gelatine,pork gelatine; gelatine; gelatin,Schweinegelatine; Gelatine,gélatine porcine; gélatine,gelatina suina; gelatina
+lard,lard; pork fat; schmalz; strutto,Schmalz; Schweinefett; Schweineschmalz,saindoux; graisse de porc,strutto; grasso di maiale; lardo
+sausage,salami; chorizo; pepperoni; mortadella; bratwurst; cervelat,Salami; Cervelat; Bratwurst; Mortadella,salami; chorizo; pepperoni; mortadelle; saucisse,salame; chorizo; pepperoni; mortadella
+pancetta,pancetta; guanciale; coppa; bresaola di suino,Pancetta; Guanciale; Coppa,pancetta; guanciale; coppa,pancetta; guanciale; coppa
+pork_rinds,pork rinds; crackling; chicharron,Grieben; Schweineschwarte,couenne de porc; grattons,cotenna di maiale; ciccioli
+e_numbers,e441; e542; e570; e631; e635,E441; E542; E570; E631; E635,E441; E542; E570; E631; E635,E441; E542; E570; E631; E635

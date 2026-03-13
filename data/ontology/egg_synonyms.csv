@@ -1,3 +1,10 @@
 term,en,de,fr,it
-egg,egg,Ei,œuf,uovo
-albumin,albumin,Albumin,albumine,albume
+egg,egg; chicken egg,Ei; Hühnerei,œuf; œuf de poule,uovo; uovo di gallina
+albumin,albumin; egg white; egg albumin,Albumin; Eiweiß; Eiklarprotein,albumine; blanc d'œuf,albume; bianco d'uovo
+egg_yolk,egg yolk; yolk,Eigelb; Eidotter,jaune d'œuf; jaune,tuorlo; rosso d'uovo
+egg_powder,egg powder; dried egg; whole egg powder,Eipulver; getrocknetes Ei; Vollei-Pulver,œuf en poudre; œuf séché,uovo in polvere; uovo essiccato
+lysozyme,lysozyme; egg lysozyme; e1105,Lysozym; E1105,lysozyme; E1105,lisozima; E1105
+mayonnaise,mayonnaise; mayo; egg-based sauce,Mayonnaise; Mayo; eibasierte Sauce,mayonnaise; mayo; sauce à base d'œufs,maionese; mayo; salsa a base di uova
+meringue,meringue; egg white meringue,Baiser; Meringue,meringue,meringa
+free_range_egg,free range egg; barn egg; organic egg,Freilandei; Bodenhaltungsei; Bio-Ei,œuf plein air; œuf de ferme; œuf bio,uovo da galline allevate all'aperto; uovo biologico
+egg_free,egg free; no eggs; without eggs,eifrei; ohne Eier,sans œufs; sans œuf,senza uova

@@ -1,2 +1,8 @@
 term,en,de,fr,it
-high_protein,high protein,proteinreich,riche en protéines,ricco di proteine
+high_protein,high protein; protein rich; rich in protein,proteinreich; eiweißreich; viel Protein,riche en protéines; haute teneur en protéines,ricco di proteine; alto contenuto proteico
+protein_source,source of protein; good source of protein,Proteinquelle; Eiweißquelle,source de protéines; bonne source de protéines,fonte di proteine; buona fonte di proteine
+protein_percent,protein per serving; g protein,g Protein; g Eiweiß pro Portion,g de protéines; g protéines par portion,g di proteine; g proteine per porzione
+whey_protein,whey protein; whey isolate; whey concentrate,Molkenprotein; Whey Isolat; Whey Konzentrat,protéine de lactosérum; isolat de lactosérum,proteine del siero; isolato di siero; concentrato di siero
+plant_protein,pea protein; soy protein; rice protein; hemp protein,Erbsenprotein; Sojaprotein; Reisprotein; Hanfprotein,protéine de pois; protéine de soja; protéine de riz; protéine de chanvre,proteina di pisello; proteina di soia; proteina di riso; proteina di canapa
+complete_protein,complete protein; all essential amino acids,vollständiges Protein; alle essenziellen Aminosäuren,protéine complète; tous les acides aminés essentiels,proteina completa; tutti gli aminoacidi essenziali
+bcaa,BCAA; branched chain amino acids; leucine; isoleucine; valine,BCAA; verzweigtkettige Aminosäuren; Leucin; Isoleucin; Valin,BCAA; acides aminés ramifiés; leucine; isoleucine; valine,BCAA; aminoacidi ramificati; leucina; isoleucina; valina

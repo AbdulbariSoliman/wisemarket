@@ -1,3 +1,11 @@
 term,en,de,fr,it
-vegan,vegan; plant based,vegan; pflanzlich,végan; végétal,vegano; vegetale
-no_animal,no animal ingredients,ohne tierische Zutaten,sans ingrédients animaux,senza ingredienti animali
+vegan,vegan; plant based; plant-based,vegan; pflanzlich; pflanzenbasiert,végan; végétal; à base de plantes,vegano; vegetale; a base vegetale
+no_animal,no animal ingredients; without animal products,ohne tierische Zutaten; ohne tierische Produkte,sans ingrédients animaux; sans produits animaux,senza ingredienti animali; senza prodotti animali
+v_label,V-Label; certified vegan; vegan society,V-Label; zertifiziert vegan; Vegan Society,V-Label; certifié vegan; Vegan Society,V-Label; certificato vegano; Vegan Society
+dairy_free,dairy free; no milk; no dairy; milk free,milchfrei; ohne Milch; laktosefrei,sans lait; sans produits laitiers,senza latte; senza latticini
+egg_free,egg free; no eggs; without eggs,eifrei; ohne Eier,sans œufs,senza uova
+honey_free,honey free; no honey; without honey,ohne Honig; honigfrei,sans miel,senza miele
+plant_milk,oat milk; almond milk; soy milk; coconut milk; rice milk,Hafermilch; Mandelmilch; Sojamilch; Kokosmilch; Reismilch,lait d'avoine; lait d'amande; lait de soja; lait de coco,latte di avena; latte di mandorla; latte di soia; latte di cocco
+vegan_cheese,vegan cheese; plant-based cheese; dairy-free cheese,veganer Käse; pflanzlicher Käse,fromage vegan; fromage végétal,formaggio vegano; formaggio vegetale
+vegan_protein,pea protein; soy protein; rice protein; hemp protein,Erbsenprotein; Sojaprotein; Reisprotein; Hanfprotein,protéine de pois; protéine de soja; protéine de riz,proteina di pisello; proteina di soia; proteina di riso
+no_gelatine,no gelatine; gelatine free; no gelatin,ohne Gelatine; gelatinefrei,sans gélatine,senza gelatina

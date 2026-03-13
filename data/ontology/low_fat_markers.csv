@@ -1,2 +1,8 @@
 term,en,de,fr,it
-low_fat,low fat,fettarm,pauvre en matières grasses,povero di grassi
+low_fat,low fat; reduced fat; less fat,fettarm; fettreduziert; weniger Fett,pauvre en matières grasses; teneur réduite en graisses,a basso contenuto di grassi; ridotto in grassi
+fat_free,fat free; zero fat; no fat,fettfrei; ohne Fett; kein Fett,sans matières grasses; zéro gras,senza grassi; zero grassi
+light,light; lite; leicht,leicht; Light,léger; light,leggero; light
+skimmed,skimmed; skim; skimmed milk,entrahmt; Magermilch,écrémé; lait écrémé,scremato; latte scremato
+semi_skimmed,semi-skimmed; half fat; low fat milk,halbentrahmt; fettarme Milch,demi-écrémé; lait demi-écrémé,parzialmente scremato; latte parzialmente scremato
+low_saturated,low saturated fat; reduced saturated fat,gesättigte Fettsäuren reduziert,faible en graisses saturées,a basso contenuto di grassi saturi
+no_trans_fat,no trans fat; trans fat free; 0g trans fat,ohne Transfette; transfettfrei,sans graisses trans,senza grassi trans

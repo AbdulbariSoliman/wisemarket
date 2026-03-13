@@ -1,3 +1,10 @@
 term,en,de,fr,it
-sugar_free,sugar free,zuckerfrei,sans sucre,senza zucchero
-low_gi,low glycemic,niedriger GI,indice glycémique bas,basso IG
+sugar_free,sugar free; zero sugar; no sugar; sugarless,zuckerfrei; ohne Zucker; kein Zucker,sans sucre; zéro sucre,senza zucchero; zero zucchero
+low_gi,low glycemic; low GI; low glycemic index; slow release,niedriger GI; niedriger glykämischer Index; langsame Freisetzung,indice glycémique bas; faible IG; libération lente,basso indice glicemico; basso IG; rilascio lento
+diabetic,diabetic; suitable for diabetics; diabetes friendly,diabetiker; für Diabetiker geeignet; diabetesfreundlich,diabétique; convient aux diabétiques; adapté aux diabétiques,diabetico; adatto ai diabetici; adatto al diabete
+no_added_sugar,no added sugar; without added sugar; unsweetened,ohne Zuckerzusatz; ungesüßt,sans sucres ajoutés; non sucré,senza zuccheri aggiunti; non zuccherato
+stevia,stevia; steviol glycoside; e960,Stevia; Steviolglykoside; E960,stévia; glycoside de stéviol; E960,stevia; glicoside di steviolo; E960
+xylitol,xylitol; e967; birch sugar,Xylitol; E967; Birkenzucker,xylitol; E967; sucre de bouleau,xilitolo; E967; zucchero di betulla
+erythritol,erythritol; e968,Erythritol; E968; Erythrit,érythritol; E968,eritritolo; E968
+inulin_diabetic,inulin; chicory fiber; low glycemic fiber,Inulin; Chicorienfaser; ballaststoffreich,inuline; fibre de chicorée; fibre à faible IG,inulina; fibra di cicoria; fibra a basso IG
+whole_grain_diabetic,whole grain; complex carbohydrates; high fiber,Vollkorn; komplexe Kohlenhydrate; ballaststoffreich,grains entiers; glucides complexes; riche en fibres,cereali integrali; carboidrati complessi; ricco di fibre

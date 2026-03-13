@@ -1,5 +1,9 @@
 term,en,de,fr,it
-alcohol,alcohol,Alkohol,alcool,alcol
-beer,beer,Bier,bière,birra
-wine,wine,Wein,vin,vino
-spirits,vodka; rum; gin,Wodka; Rum; Gin,vodka; rhum; gin,vodka; rum; gin
+alcohol,alcohol; ethanol,Alkohol; Ethanol,alcool; éthanol,alcol; etanolo
+beer,beer; lager; ale; stout; malt beer,Bier; Lager; Ale; Stout; Malzbier,bière; lager; ale; stout; bière maltée,birra; lager; ale; stout; birra al malto
+wine,wine; red wine; white wine; rosé; prosecco; champagne; cava; sparkling wine,Wein; Rotwein; Weißwein; Rosé; Prosecco; Champagner; Sekt,vin; vin rouge; vin blanc; rosé; prosecco; champagne,vino; vino rosso; vino bianco; rosé; prosecco; champagne
+spirits,vodka; rum; gin; whisky; brandy; cognac; tequila; absinthe,Wodka; Rum; Gin; Whisky; Brandy; Cognac; Tequila; Absinth,vodka; rhum; gin; whisky; brandy; cognac; tequila; absinthe,vodka; rum; gin; whisky; brandy; cognac; tequila
+liqueur,liqueur; amaretto; baileys; kahlua; cointreau; schnapps,Likör; Amaretto; Schnaps,liqueur; amaretto; schnaps,liquore; amaretto; schnaps
+cider,cider; hard cider; apple wine,Cidre; Apfelwein,cidre,sidro
+wine_vinegar,wine vinegar; balsamic vinegar; sherry vinegar,Weinessig; Balsamico-Essig,vinaigre de vin; vinaigre balsamique,aceto di vino; aceto balsamico
+mirin,mirin; sake; rice wine,Mirin; Sake; Reiswein,mirin; sake; vin de riz,mirin; sake; vino di riso

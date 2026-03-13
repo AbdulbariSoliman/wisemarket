@@ -1,3 +1,14 @@
 term,en,de,fr,it
-vitamin_c,vitamin C,Vitamin C,vitamine C,vitamina C
-vitamin_d,vitamin D,Vitamin D,vitamine D,vitamina D
+vitamin_a,vitamin A; retinol; beta-carotene,Vitamin A; Retinol; Beta-Carotin,vitamine A; rétinol; bêta-carotène,vitamina A; retinolo; beta-carotene
+vitamin_b1,vitamin B1; thiamine; thiamin,Vitamin B1; Thiamin,vitamine B1; thiamine,vitamina B1; tiamina
+vitamin_b2,vitamin B2; riboflavin,Vitamin B2; Riboflavin,vitamine B2; riboflavine,vitamina B2; riboflavina
+vitamin_b3,vitamin B3; niacin; nicotinic acid,Vitamin B3; Niacin,vitamine B3; niacine,vitamina B3; niacina
+vitamin_b6,vitamin B6; pyridoxine,Vitamin B6; Pyridoxin,vitamine B6; pyridoxine,vitamina B6; piridossina
+vitamin_b12,vitamin B12; cobalamin; cyanocobalamin,Vitamin B12; Cobalamin,vitamine B12; cobalamine,vitamina B12; cobalamina
+vitamin_c,vitamin C; ascorbic acid; ascorbate,Vitamin C; Ascorbinsäure,vitamine C; acide ascorbique,vitamina C; acido ascorbico
+vitamin_d,vitamin D; vitamin D2; vitamin D3; cholecalciferol; ergocalciferol,Vitamin D; Vitamin D2; Vitamin D3; Cholecalciferol,vitamine D; vitamine D2; vitamine D3; cholécalciférol,vitamina D; vitamina D2; vitamina D3; colecalciferolo
+vitamin_e,vitamin E; tocopherol; alpha-tocopherol,Vitamin E; Tocopherol,vitamine E; tocophérol,vitamina E; tocoferolo
+vitamin_k,vitamin K; vitamin K1; vitamin K2; phylloquinone; menaquinone,Vitamin K; Vitamin K1; Vitamin K2; Phyllochinon,vitamine K; vitamine K1; vitamine K2; phylloquinone,vitamina K; vitamina K1; vitamina K2; fillochinone
+folate,folate; folic acid; folacin; vitamin B9,Folat; Folsäure; Vitamin B9,folate; acide folique; vitamine B9,folato; acido folico; vitamina B9
+biotin,biotin; vitamin B7; vitamin H,Biotin; Vitamin B7; Vitamin H,biotine; vitamine B7; vitamine H,biotina; vitamina B7; vitamina H
+pantothenic,pantothenic acid; vitamin B5,Pantothensäure; Vitamin B5,acide pantothénique; vitamine B5,acido pantotenico; vitamina B5

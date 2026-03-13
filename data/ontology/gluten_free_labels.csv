@@ -1,2 +1,11 @@
 term,en,de,fr,it
-gluten_free,gluten free,glutenfrei,sans gluten,senza glutine
+gluten_free,gluten free; gluten-free,glutenfrei; ohne Gluten,sans gluten,senza glutine
+certified_gf,certified gluten free; AOECS standard,zertifiziert glutenfrei,certifié sans gluten,certificato senza glutine
+crossed_grain,crossed grain symbol; coeliac uk,durchgestrichene Ähre,épi barré,spiga barrata
+wheat_free,wheat free; no wheat,weizenfrei; ohne Weizen,sans blé; sans froment,senza frumento; senza grano
+naturally_gf,naturally gluten free; inherently gf,von Natur aus glutenfrei,naturellement sans gluten,naturalmente senza glutine
+rice_based,rice flour; rice starch; rice bread,Reismehl; Reisstärke; Reisbrot,farine de riz; amidon de riz,farina di riso; amido di riso
+corn_based,corn flour; maize starch; polenta,Maismehl; Maisstärke; Polenta,farine de maïs; amidon de maïs; polenta,farina di mais; amido di mais; polenta
+buckwheat_based,buckwheat flour; buckwheat bread,Buchweizenmehl; Buchweizenbrot,farine de sarrasin; pain de sarrasin,farina di grano saraceno
+quinoa_based,quinoa flour; quinoa pasta,Quinoamehl; Quinoapasta,farine de quinoa; pâtes au quinoa,farina di quinoa; pasta di quinoa
+certified_ch,aha! glutenfrei; Swiss Coeliac Society,aha! glutenfrei; Schweizerische Zöliakie-Gesellschaft,aha! sans gluten; Association suisse romande de la cœliaquie,aha! senza glutine

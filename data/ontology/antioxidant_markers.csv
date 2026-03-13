@@ -1,3 +1,11 @@
 term,en,de,fr,it
-vitamin_c,vitamin C; ascorbic acid,Vitamin C; Ascorbinsäure,vitamine C,vitamina C
-polyphenols,polyphenols; flavonoids,Polyphenole,polyphénols,polifenoli
+vitamin_c,vitamin C; ascorbic acid; ascorbate,Vitamin C; Ascorbinsäure; Ascorbat,vitamine C; acide ascorbique,vitamina C; acido ascorbico
+vitamin_e,vitamin E; tocopherol; alpha-tocopherol,Vitamin E; Tocopherol; Alpha-Tocopherol,vitamine E; tocophérol,vitamina E; tocoferolo
+polyphenols,polyphenols; flavonoids; catechins; quercetin,Polyphenole; Flavonoide; Catechine; Quercetin,polyphénols; flavonoïdes; catéchines,polifenoli; flavonoidi; catechine; quercetina
+resveratrol,resveratrol,Resveratrol,resvératrol,resveratrolo
+lycopene,lycopene; tomato extract,Lycopin; Tomatenextrakt,lycopène; extrait de tomate,licopene; estratto di pomodoro
+beta_carotene,beta-carotene; carotenoids; lutein; zeaxanthin,Beta-Carotin; Carotinoide; Lutein; Zeaxanthin,bêta-carotène; caroténoïdes; lutéine,beta-carotene; carotenoidi; luteina
+green_tea,green tea extract; EGCG; epigallocatechin,Grünteeextrakt; EGCG,extrait de thé vert; EGCG,estratto di tè verde; EGCG
+coenzyme_q10,coenzyme Q10; CoQ10; ubiquinol,Coenzym Q10; CoQ10; Ubiquinol,coenzyme Q10; CoQ10; ubiquinol,coenzima Q10; CoQ10; ubiquinolo
+selenium,selenium; selenomethionine,Selen; Selenomethionin,sélénium; sélénométhionine,selenio; selenometionina
+zinc_antioxidant,zinc; zinc contributes to protection,Zink; Zink schützt,zinc; zinc contribue à la protection,zinco; zinco contribuisce alla protezione

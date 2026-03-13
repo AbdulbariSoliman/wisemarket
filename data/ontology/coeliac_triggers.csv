@@ -1,2 +1,13 @@
 term,en,de,fr,it
 gluten,gluten,Gluten,gluten,glutine
+wheat,wheat; wheat flour; wheat starch; durum wheat; wheat bran,Weizen; Weizenmehl; Weizenstärke; Hartweizen; Kleie,blé; farine de blé; amidon de blé; blé dur; son de blé,frumento; farina di frumento; amido di frumento; grano duro
+rye,rye; rye flour; rye bread; rye starch,Roggen; Roggenmehl; Roggenbrot; Roggenstärke,seigle; farine de seigle; pain de seigle,segale; farina di segale; pane di segale
+barley,barley; barley malt; barley flour; pearl barley,Gerste; Gerstenmalz; Gerstenmehl; Perlgraupen,orge; malt d'orge; farine d'orge; orge perlé,orzo; malto d'orzo; farina d'orzo; orzo perlato
+spelt,spelt; spelt flour; dinkel,Dinkel; Dinkelmehl,épeautre; farine d'épeautre,farro; farina di farro; spelta
+kamut,kamut; khorasan wheat,Kamut; Khorasan-Weizen,kamut; blé khorasan,kamut; grano khorasan
+oats,oats; oat flour; oatmeal; rolled oats,Hafer; Hafermehl; Haferflocken,avoine; farine d'avoine; flocons d'avoine,avena; farina d'avena; fiocchi d'avena
+malt,malt; malt extract; malt vinegar; malted barley,Malz; Malzextrakt; Malzessig,malt; extrait de malt; vinaigre de malt,malto; estratto di malto; aceto di malto
+triticale,triticale,Triticale,triticale,triticale
+modified_starch,modified wheat starch; hydrolysed wheat protein,modifizierte Weizenstärke; hydrolysiertes Weizenprotein,amidon de blé modifié; protéine de blé hydrolysée,amido di frumento modificato; proteina di frumento idrolizzata
+wheat_germ,wheat germ; wheat germ oil,Weizenkeime; Weizenkeimöl,germe de blé; huile de germe de blé,germe di grano; olio di germe di grano
+breadcrumbs,breadcrumbs; panko; croutons,Paniermehl; Panko; Croutons,chapelure; panko; croûtons,pangrattato; panko; crostini

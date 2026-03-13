@@ -1,3 +1,10 @@
 term,en,de,fr,it
-recyclable,recyclable,recycelbar,recyclable,riciclabile
-compostable,compostable,kompostierbar,compostable,compostabile
+recyclable,recyclable; please recycle; recycling,recycelbar; bitte recyceln; Recycling,recyclable; veuillez recycler; recyclage,riciclabile; riciclare; riciclaggio
+compostable,compostable; industrially compostable; home compostable,kompostierbar; industriell kompostierbar; heimkompostierbar,compostable; compostable industriellement; compostable à la maison,compostabile; compostabile industrialmente; compostabile a casa
+biodegradable,biodegradable; bio-degradable,biologisch abbaubar; abbaubar,biodégradable,biodegradabile
+reusable,reusable; refillable; returnable,wiederverwendbar; nachfüllbar; Mehrweg; Pfand,réutilisable; rechargeable; consigné,riutilizzabile; ricaricabile; a rendere
+reduced_plastic,reduced plastic; less plastic; plastic free; plastic reduced,reduzierter Kunststoff; weniger Plastik; plastikfrei,plastique réduit; moins de plastique; sans plastique,plastica ridotta; meno plastica; senza plastica
+fsc,FSC; FSC certified; sustainable forestry,FSC; FSC-zertifiziert; nachhaltige Forstwirtschaft,FSC; certifié FSC; foresterie durable,FSC; certificato FSC; silvicoltura sostenibile
+green_dot,green dot; Der Grüne Punkt; point vert,Grüner Punkt; Der Grüne Punkt,point vert; Der Grüne Punkt,punto verde; Der Grüne Punkt
+paper_based,paper packaging; cardboard; paperboard,Papierverpackung; Karton; Pappe,emballage papier; carton,imballaggio in carta; cartone
+glass,glass packaging; glass bottle; glass jar,Glasverpackung; Glasflasche; Glas,emballage en verre; bouteille en verre,imballaggio in vetro; bottiglia di vetro

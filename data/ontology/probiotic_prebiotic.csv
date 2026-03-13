@@ -1,3 +1,8 @@
 term,en,de,fr,it
-probiotic,probiotic,probiotisch,probiotique,probiotico
-prebiotic,prebiotic,präbiotisch,prébiotique,prebiotico
+probiotic,probiotic; live cultures; active cultures; live bacteria,probiotisch; lebende Kulturen; aktive Kulturen; Lebendkulturen,probiotique; cultures vivantes; cultures actives; bactéries vivantes,probiotico; culture vive; culture attive; batteri vivi
+prebiotic,prebiotic; prebiotic fiber; prebiotics,präbiotisch; präbiotische Ballaststoffe,prébiotique; fibre prébiotique,prebiotico; fibra prebiotica
+lactobacillus,lactobacillus; L. acidophilus; L. rhamnosus; L. casei; L. plantarum,Lactobacillus; L. acidophilus; L. rhamnosus,lactobacillus; L. acidophilus; L. rhamnosus,lactobacillus; L. acidophilus; L. rhamnosus
+bifidobacterium,bifidobacterium; B. longum; B. lactis; B. bifidum,Bifidobacterium; B. longum; B. lactis,bifidobacterium; B. longum; B. lactis,bifidobacterium; B. longum; B. lactis
+inulin_pre,inulin; FOS; fructooligosaccharides; chicory root,Inulin; FOS; Fructooligosaccharide; Zichorienwurzel,inuline; FOS; fructooligosaccharides; racine de chicorée,inulina; FOS; fruttooligosaccaridi; radice di cicoria
+gut_health,gut health; digestive health; microbiome; intestinal flora,Darmgesundheit; Verdauungsgesundheit; Mikrobiom; Darmflora,santé intestinale; microbiome; flore intestinale,salute intestinale; microbioma; flora intestinale
+fermented_probiotic,fermented; yogurt; kefir; kimchi; sauerkraut,fermentiert; Joghurt; Kefir; Kimchi; Sauerkraut,fermenté; yaourt; kéfir; kimchi; choucroute,fermentato; yogurt; kefir; kimchi; crauti

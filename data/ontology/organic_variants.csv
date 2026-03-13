@@ -1,3 +1,9 @@
 term,en,de,fr,it
-organic,organic,bio,biologique,biologico
-demeter,demeter,demeter,demeter,demeter
+organic,organic; certified organic,bio; biologisch; zertifiziert biologisch,biologique; certifié biologique; bio,biologico; certificato biologico; bio
+demeter,demeter; biodynamic; demeter certified,Demeter; biodynamisch; Demeter-zertifiziert,Demeter; biodynamique; certifié Demeter,Demeter; biodinamico; certificato Demeter
+bio_suisse,Bio Suisse; Knospe; Swiss organic label,Bio Suisse; Knospe; Schweizer Bio-Label,Bio Suisse; Bourgeon; label bio suisse,Bio Suisse; Gemma; etichetta bio svizzera
+eu_organic,EU organic; EU organic logo; EC organic,EU-Bio; EU-Bio-Logo,bio UE; logo bio UE,bio UE; logo bio UE
+naturland,Naturland; naturland certified,Naturland; Naturland-zertifiziert,Naturland; certifié Naturland,Naturland; certificato Naturland
+soil_association,Soil Association; SA certified,Soil Association,Soil Association,Soil Association
+no_pesticides,no pesticides; pesticide free; pesticide-free,ohne Pestizide; pestizidfreit,sans pesticides; exempt de pesticides,senza pesticidi; privo di pesticidi
+no_gmo,no GMO; non-GMO; GMO free; without genetically modified,ohne GVO; GVO-frei; nicht gentechnisch verändert,sans OGM; non-OGM; exempt d'OGM,senza OGM; non-OGM; privo di OGM

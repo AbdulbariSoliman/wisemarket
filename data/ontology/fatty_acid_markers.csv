@@ -1,3 +1,9 @@
 term,en,de,fr,it
-omega3,omega 3,Omega 3,oméga 3,omega 3
-omega6,omega 6,Omega 6,oméga 6,omega 6
+omega3,omega 3; n-3; ALA; EPA; DHA,Omega 3; n-3; ALA; EPA; DHA,oméga 3; n-3; ALA; EPA; DHA,omega 3; n-3; ALA; EPA; DHA
+omega6,omega 6; n-6; linoleic acid; arachidonic acid,Omega 6; n-6; Linolsäure; Arachidonsäure,oméga 6; n-6; acide linoléique; acide arachidonique,omega 6; n-6; acido linoleico; acido arachidonico
+omega9,omega 9; oleic acid; monounsaturated,Omega 9; Ölsäure; einfach ungesättigt,oméga 9; acide oléique; monoinsaturé,omega 9; acido oleico; monoinsaturo
+saturated,saturated fat; saturated fatty acids,gesättigte Fettsäuren; gesättigtes Fett,graisses saturées; acides gras saturés,grassi saturi; acidi grassi saturi
+unsaturated,unsaturated fat; polyunsaturated; monounsaturated,ungesättigte Fettsäuren; mehrfach ungesättigt,graisses insaturées; polyinsaturées; monoinsaturées,grassi insaturi; polinsaturi; monoinsaturi
+trans_fat,trans fat; trans fatty acids; hydrogenated fat,Transfette; trans-Fettsäuren; hydriertes Fett,graisses trans; acides gras trans; graisses hydrogénées,grassi trans; acidi grassi trans; grassi idrogenati
+cla,CLA; conjugated linoleic acid,CLA; konjugierte Linolsäure,CLA; acide linoléique conjugué,CLA; acido linoleico coniugato
+mct,MCT; medium chain triglycerides; caprylic acid; capric acid,MCT; mittelkettige Triglyzeride; Caprylsäure,MCT; triglycérides à chaîne moyenne; acide caprylique,MCT; trigliceridi a catena media; acido caprilico

@@ -1,2 +1,9 @@
 term,en,de,fr,it
-lactose_free,lactose free,laktosefrei,sans lactose,senza lattosio
+lactose_free,lactose free; lactose-free; no lactose,laktosefrei; ohne Laktose,sans lactose,senza lattosio
+low_lactose,low lactose; reduced lactose,laktosearm; laktosereduziert,faible teneur en lactose,a basso contenuto di lattosio
+dairy_free,dairy free; milk free; no dairy,milchfrei; ohne Milch,sans produits laitiers; sans lait,senza latticini; senza latte
+lactase,lactase enzyme; lactase added,Laktase-Enzym,enzyme lactase,enzima lattasi
+plant_milk,oat milk; almond milk; soy milk; rice milk; coconut milk; oat drink,Hafermilch; Mandelmilch; Sojamilch; Reismilch; Kokosmilch,lait d'avoine; lait d'amande; lait de soja; lait de riz,latte di avena; latte di mandorla; latte di soia; latte di riso
+migros_lf,Migros lactose free; Migros laktosefrei,Migros laktosefrei,Migros sans lactose,Migros senza lattosio
+coop_lf,Coop lactose free; Coop laktosefrei,Coop laktosefrei,Coop sans lactose,Coop senza lattosio
+vegan_dairy,vegan cheese; vegan butter; vegan cream; oat cream; soy cream,veganer Käse; vegane Butter; vegane Sahne; Hafersahne,fromage vegan; beurre vegan; crème végétale,formaggio vegano; burro vegano; panna vegetale

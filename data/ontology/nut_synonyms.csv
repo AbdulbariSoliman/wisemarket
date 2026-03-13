@@ -1,3 +1,12 @@
 term,en,de,fr,it
-almond,almond,Mandel,amande,mandorla
-hazelnut,hazelnut,Haselnuss,noisette,nocciola
+almond,almond; almond flour; almond paste; marzipan,Mandel; Mandelmehl; Mandelpaste; Marzipan,amande; farine d'amande; pâte d'amande; massepain,mandorla; farina di mandorle; pasta di mandorle; marzapane
+hazelnut,hazelnut; hazel; filbert,Haselnuss; Hasel,noisette; aveline,nocciola
+walnut,walnut; english walnut; black walnut,Walnuss; Schwarze Walnuss,noix; noix noire,noce; noce nera
+cashew,cashew; cashew nut,Cashew; Cashewnuss,cajou; noix de cajou,anacardo; noce di anacardo
+pistachio,pistachio,Pistazie,pistache,pistacchio
+pecan,pecan; pecan nut,Pekannuss,noix de pécan,noce pecan
+macadamia,macadamia; macadamia nut; queensland nut,Macadamia; Macadamianuss,macadamia; noix de macadamia,macadamia; noce di macadamia
+brazil_nut,brazil nut; para nut,Paranuss; Brasilnuss,noix du Brésil; noix du Para,noce del Brasile; noce del Pará
+pine_nut,pine nut; pignoli; stone pine,Pinienkern; Piniennuss,pignon de pin; pignole,pinolo; pignolo
+chestnut,chestnut; sweet chestnut; marron,Kastanie; Edelkastanie; Maroni,châtaigne; marron,castagna; marrone
+coconut,coconut; desiccated coconut; coconut flour; coconut milk,Kokosnuss; Kokosraspeln; Kokosmehl; Kokosmilch,noix de coco; coco râpé; farine de coco; lait de coco,cocco; noce di cocco; cocco grattugiato

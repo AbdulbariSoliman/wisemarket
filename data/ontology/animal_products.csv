@@ -1,4 +1,11 @@
 term,en,de,fr,it
-meat,meat; animal meat,Fleisch; Tierfleisch,viande,carne
-milk,milk; dairy,Milch; Molkerei,lait; produits laitiers,latte; latticini
-eggs,eggs; egg powder,Eier; Eipulver,œufs,uova
+meat,meat; animal meat; flesh,Fleisch; Tierfleisch,viande; chair animale,carne; carne animale
+milk,milk; dairy; dairy products; cow milk,Milch; Molkerei; Milchprodukte; Kuhmilch,lait; produits laitiers; lait de vache,latte; latticini; prodotti caseari; latte vaccino
+eggs,eggs; egg; egg powder; egg white; egg yolk,Eier; Ei; Eipulver; Eiweiß; Eigelb,œufs; œuf; poudre d'œuf,uova; uovo; uovo in polvere
+fish,fish; seafood; marine products,Fisch; Meeresfrüchte; Meeresprodukte,poisson; fruits de mer; produits marins,pesce; frutti di mare; prodotti marini
+honey,honey; beeswax; bee products; royal jelly,Honig; Bienenwachs; Bienenprodukte; Gelee Royale,miel; cire d'abeille; produits de la ruche; gelée royale,miele; cera d'api; prodotti dell'alveare; pappa reale
+gelatine,gelatine; gelatin; animal gelatine; pork gelatine,Gelatine; Tiergelatine; Schweinegelatine,gélatine; gélatine animale; gélatine porcine,gelatina; gelatina animale; gelatina suina
+collagen,collagen; collagen peptides; hydrolysed collagen,Kollagen; Kollagenpeptide; hydrolysiertes Kollagen,collagène; peptides de collagène; collagène hydrolysé,collagene; peptidi di collagene; collagene idrolizzato
+whey,whey; whey protein; lactoserum,Molke; Molkenprotein,lactosérum; protéine de lactosérum,siero; proteina del siero di latte
+casein,casein; caseinate; milk protein,Kasein; Kaseinat; Milchprotein,caséine; caséinate; protéine de lait,caseina; caseinato; proteina del latte
+lard,lard; animal fat; pork fat; beef tallow,Schmalz; Schweinefett; Rinderfett; tierisches Fett,saindoux; graisse animale; graisse de porc; suif de bœuf,strutto; grasso animale; grasso di maiale; sego di manzo

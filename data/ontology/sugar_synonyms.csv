@@ -1,5 +1,14 @@
 term,en,de,fr,it
-sugar,sugar; sucrose,Zucker; Saccharose,sucre; saccharose,zucchero; saccarosio
-glucose,glucose,Glukose,glucose,glucosio
-fructose,fructose,Fruktose,fructose,fruttosio
-syrup,syrup,Sirup,sirop,sciroppo
+sugar,sugar; sucrose; cane sugar; beet sugar,Zucker; Saccharose; Rohrzucker; Rübenzucker,sucre; saccharose; sucre de canne; sucre de betterave,zucchero; saccarosio; zucchero di canna; zucchero di barbabietola
+glucose,glucose; dextrose; grape sugar,Glukose; Dextrose; Traubenzucker,glucose; dextrose,glucosio; destrosio; zucchero d'uva
+fructose,fructose; fruit sugar; levulose,Fruktose; Fruchtzucker,fructose; sucre de fruit,fruttosio; zucchero di frutta
+syrup,syrup; corn syrup; glucose syrup; golden syrup,Sirup; Maissirup; Glukosesirup,sirop; sirop de maïs; sirop de glucose,sciroppo; sciroppo di mais; sciroppo di glucosio
+honey,honey; raw honey; acacia honey,Honig; Rohhonig; Akazienhonig,miel; miel brut; miel d'acacia,miele; miele grezzo; miele d'acacia
+agave,agave; agave syrup; agave nectar,Agave; Agavensirup; Agavennektar,agave; sirop d'agave; nectar d'agave,agave; sciroppo d'agave; nettare d'agave
+maple,maple syrup; maple sugar,Ahornsirup; Ahornzucker,sirop d'érable; sucre d'érable,sciroppo d'acero; zucchero d'acero
+maltose,maltose; malt sugar; malted barley syrup,Maltose; Malzzucker; Malzsirup,maltose; sucre de malt; sirop de malt,maltosio; zucchero di malto; sciroppo di malto
+lactose,lactose; milk sugar,Laktose; Milchzucker,lactose; sucre de lait,lattosio; zucchero del latte
+treacle,treacle; molasses; black treacle,Melasse; schwarze Melasse,mélasse,melassa
+coconut_sugar,coconut sugar; coconut blossom sugar; palm sugar,Kokosblütenzucker; Kokoszucker; Palmzucker,sucre de coco; sucre de fleur de coco,zucchero di cocco; zucchero di fiori di cocco
+date_syrup,date syrup; date sugar; date paste,Dattelsirup; Dattelzucker,sirop de datte; sucre de datte,sciroppo di datteri; zucchero di datteri
+invert_sugar,invert sugar; inverted sugar syrup,Invertzucker; Invertsirup,sucre inverti; sirop de sucre inverti,zucchero invertito; sciroppo di zucchero invertito

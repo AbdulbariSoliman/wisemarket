@@ -1,3 +1,9 @@
 term,en,de,fr,it
-christmas,christmas,Weihnachten,Noël,Natale
-easter,easter,Ostern,Pâques,Pasqua
+christmas,christmas; xmas; festive; holiday season,Weihnachten; Weihnachtszeit; Festzeit,Noël; période des fêtes; festif,Natale; periodo natalizio; festivo
+easter,easter; spring; easter edition,Ostern; Frühjahr; Osterausgabe,Pâques; printemps; édition de Pâques,Pasqua; primavera; edizione pasquale
+summer,summer; summer edition; seasonal summer,Sommer; Sommerausgabe; Sommersaison,été; édition estivale; saison estivale,estate; edizione estiva; stagione estiva
+autumn,autumn; fall; harvest season,Herbst; Ernte; Herbstsaison,automne; récolte; saison automnale,autunno; raccolta; stagione autunnale
+winter,winter; winter edition; seasonal winter,Winter; Winterausgabe; Wintersaison,hiver; édition hivernale; saison hivernale,inverno; edizione invernale; stagione invernale
+valentines,valentines; valentine's day; love edition,Valentinstag; Liebesausgabe,Saint-Valentin; fête des amoureux,San Valentino; edizione romantica
+limited_edition,limited edition; seasonal; special edition,limitierte Edition; saisonal; Sonderausgabe,édition limitée; saisonnière; édition spéciale,edizione limitata; stagionale; edizione speciale
+new_year,new year; new year's edition; sylvester,Neujahr; Silvester; Neujahrsspezial,nouvel an; Saint-Sylvestre; édition du nouvel an,capodanno; San Silvestro; edizione di Capodanno

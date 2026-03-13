@@ -1,11 +1,15 @@
 term,en,de,fr,it
-gluten,wheat; rye; barley; spelt; malt,Weizen; Roggen; Gerste; Dinkel; Malz,blé; seigle; orge; épeautre; malt,frumento; segale; orzo; farro; malto
-milk,milk; lactose; whey; casein,Milch; Laktose; Molke; Kasein,lait; lactose; lactosérum; caséine,latte; lattosio; siero; caseina
-eggs,egg; albumin,Ei; Albumin,œuf; albumine,uovo; albume
-fish,salmon; tuna; cod,Fisch; Lachs; Thunfisch,poisson; saumon; thon,pesce; salmone; tonno
-soy,soy; tofu,Soja; Tofu,soja; tofu,soia; tofu
-nuts,almond; hazelnut; walnut,Mandeln; Haselnüsse,amandes; noisettes,mandorle; nocciole
-celery,celery,Sellerie,céleri,sedano
-mustard,mustard,Senf,moutarde,senape
-sesame,sesame,Sesam,sésame,sesamo
-sulphites,sulphites; e220,Sulfite; E220,sulfites; e220,solfiti; e220
+gluten,wheat; rye; barley; spelt; malt; oats; kamut,Weizen; Roggen; Gerste; Dinkel; Malz; Hafer; Kamut,blé; seigle; orge; épeautre; malt; avoine,frumento; segale; orzo; farro; malto; avena
+milk,milk; lactose; whey; casein; cream; butter; cheese; ghee,Milch; Laktose; Molke; Kasein; Sahne; Butter; Käse; Ghee,lait; lactose; lactosérum; caséine; crème; beurre; fromage,latte; lattosio; siero; caseina; panna; burro; formaggio
+eggs,egg; albumin; egg white; egg yolk; egg powder; lysozyme,Ei; Albumin; Eiweiß; Eigelb; Eipulver; Lysozym,œuf; albumine; blanc d'œuf; jaune d'œuf,uovo; albume; tuorlo; uovo in polvere
+fish,fish; anchovy; sardine; herring; mackerel; bass; plaice,Fisch; Sardelle; Sardine; Hering; Makrele; Barsch,poisson; anchois; sardine; hareng; maquereau,pesce; alice; sardina; aringa; sgombro
+crustaceans,shrimp; prawn; crab; lobster; crayfish; langoustine,Garnele; Krabbe; Hummer; Flusskrebs; Langustine,crevette; crabe; homard; écrevisse; langoustine,gambero; granchio; aragosta; scampo
+molluscs,squid; octopus; mussel; oyster; scallop; clam; snail,Tintenfisch; Oktopus; Muschel; Auster; Jakobsmuschel,calmar; poulpe; moule; huître; pétoncle; escargot,calamaro; polpo; cozza; ostrica; capesante; lumaca
+soy,soy; soya; tofu; tempeh; miso; edamame; soy sauce,Soja; Tofu; Tempeh; Miso; Edamame; Sojasoße,soja; tofu; tempeh; miso; edamame; sauce soja,soia; tofu; tempeh; miso; edamame; salsa di soia
+nuts,almond; hazelnut; walnut; cashew; pistachio; pecan; macadamia; brazil nut; pine nut; queensland nut,Mandel; Haselnuss; Walnuss; Cashew; Pistazie; Pekannuss; Macadamia; Paranuss; Pinienkern,amande; noisette; noix; cajou; pistache; noix de pécan; macadamia; noix du Brésil,mandorla; nocciola; noce; anacardo; pistacchio; noce pecan; macadamia
+celery,celery; celeriac; celery seed; celery salt,Sellerie; Knollensellerie; Selleriesamen; Sellerie-Salz,céleri; céleri-rave; graines de céleri; sel de céleri,sedano; sedano rapa; semi di sedano
+mustard,mustard; mustard seed; mustard flour; mustard oil,Senf; Senfkorn; Senfmehl; Senföl,moutarde; graine de moutarde; farine de moutarde,senape; semi di senape; farina di senape
+sesame,sesame; sesame seed; sesame oil; tahini; til,Sesam; Sesamkorn; Sesamöl; Tahini,sésame; graines de sésame; huile de sésame; tahini,sesamo; semi di sesamo; olio di sesamo; tahini
+sulphites,sulphites; sulfites; sulphur dioxide; e220; e221; e222; e223; e224; e226; e227; e228,Sulfite; Schwefeldioxid; E220; E221; E222; E223; E224,sulfites; dioxyde de soufre; e220; e221; e222,solfiti; diossido di zolfo; e220; e221; e222
+lupin,lupin; lupin flour; lupin seed; lupin protein,Lupine; Lupinenmehl; Lupinensamen; Lupinenprotein,lupin; farine de lupin; graine de lupin,lupino; farina di lupino; seme di lupino
+peanuts,peanut; groundnut; peanut oil; peanut butter; arachide,Erdnuss; Erdnussöl; Erdnussbutter; Arachide,cacahuète; arachide; huile d'arachide,arachide; burro di arachidi; olio di arachidi

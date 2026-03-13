@@ -1,3 +1,9 @@
 term,en,de,fr,it
-sustainable,sustainable,nachhaltig,durable,sostenibile
-climate_neutral,climate neutral,klimaneutral,neutre pour le climat,climaticamente neutro
+sustainable,sustainable; sustainability; sustainably sourced,nachhaltig; Nachhaltigkeit; nachhaltig beschafft,durable; durabilité; d'origine durable,sostenibile; sostenibilità; provenienza sostenibile
+climate_neutral,climate neutral; carbon neutral; net zero; CO2 neutral,klimaneutral; CO2-neutral; netto null,neutre pour le climat; neutre en carbone; zéro net,climaticamente neutro; a emissioni zero; CO2 neutro
+carbon_footprint,low carbon footprint; reduced emissions; carbon reduced,geringer CO2-Fußabdruck; reduzierte Emissionen,faible empreinte carbone; émissions réduites,bassa impronta di carbonio; emissioni ridotte
+wwf,WWF; WWF partnership; panda label,WWF; WWF-Partnerschaft; Panda-Label,WWF; partenariat WWF; label panda,WWF; partnership WWF; etichetta panda
+msc_sus,MSC; sustainable fishing; sustainably caught,MSC; nachhaltige Fischerei; nachhaltig gefangen,MSC; pêche durable; pêché durablement,MSC; pesca sostenibile; pescato in modo sostenibile
+palm_sus,RSPO; sustainable palm oil; certified sustainable,RSPO; nachhaltiges Palmöl,RSPO; huile de palme durable,RSPO; olio di palma sostenibile
+local,local; locally sourced; regional; Swiss made; grown in Switzerland,lokal; regional; Schweizer Herkunft; in der Schweiz angebaut,local; d'origine locale; régional; produit en Suisse,locale; provenienza locale; regionale; prodotto in Svizzera
+zero_waste,zero waste; waste reduction; minimal packaging,Zero Waste; Abfallreduzierung; minimale Verpackung,zéro déchet; réduction des déchets; emballage minimal,zero rifiuti; riduzione dei rifiuti; imballaggio minimo

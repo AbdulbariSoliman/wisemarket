@@ -1,5 +1,13 @@
 term,en,de,fr,it
-emulsifier,emulsifier,Emulgator,émulsifiant,emulsionante
-stabilizer,stabilizer,Stabilisator,stabilisant,stabilizzante
-colorant,colorant,Farbstoff,colorant,colorante
-flavor_enhancer,msg; glutamate,Geschmacksverstärker,exhausteur de goût,esaltatore di sapidità
+emulsifier,emulsifier; emulsifying agent; e322; e471; e472; e473; e474; e475,Emulgator; E322; E471; E472; E473; E474; E475,émulsifiant; agent émulsifiant; E322; E471,emulsionante; agente emulsionante; E322; E471
+stabilizer,stabilizer; stabilising agent; e412; e415; e440; e466,Stabilisator; Stabilisierungsmittel; E412; E415; E440,stabilisant; agent stabilisant; E412; E415,stabilizzante; agente stabilizzante; E412; E415
+colorant,colorant; food color; e100; e101; e102; e120; e150; e160; e171,Farbstoff; Lebensmittelfarbe; E102; E120; E150; E171,colorant; couleur alimentaire; E102; E120; E150,colorante; colore alimentare; E102; E120; E150
+flavor_enhancer,flavor enhancer; taste enhancer; msg; glutamate; e621; e622; e623,Geschmacksverstärker; MSG; Glutamat; E621; E622,exhausteur de goût; MSG; glutamate; E621; E622,esaltatore di sapidità; MSG; glutammato; E621
+preservative,preservative; e200; e202; e210; e211; e212; e220; sorbate; benzoate,Konservierungsstoff; Sorbat; Benzoat; E200; E202; E210,conservateur; sorbate; benzoate; E200; E202; E210,conservante; sorbato; benzoato; E200; E202; E210
+thickener,thickener; e401; e404; e406; e407; e410; e412; e415; e440; xanthan; guar gum; carrageenan,Verdickungsmittel; Xanthan; Guarkernmehl; Carrageen,épaississant; xanthane; gomme de guar; carraghénane,addensante; xantano; gomma di guar; carragenina
+sweetener,sweetener; artificial sweetener; e950; e951; e952; e954; e955; e960; e961,Süßungsmittel; künstlicher Süßstoff; E950; E951; E952; E954; E955; E960,édulcorant; édulcorant artificiel; E950; E951; E952; E955,dolcificante; dolcificante artificiale; E950; E951; E952; E955
+antioxidant_e,antioxidant; e300; e301; e302; e306; e307; e308; e309; e320; e321,Antioxidationsmittel; E300; E301; E302; E306; E320; E321,antioxydant; E300; E301; E302; E306; E320; E321,antiossidante; E300; E301; E302; E306; E320; E321
+acidity_regulator,acidity regulator; e260; e261; e262; e263; e270; e296; e297; e325; e330; e331; e332; e333,Säuerungsmittel; E260; E270; E296; E330; E331,régulateur d'acidité; E260; E270; E296; E330; E331,correttore di acidità; E260; E270; E296; E330; E331
+anti_caking,anti-caking agent; e341; e460; e470; e551; e552; e553; e558; e559,Trennmittel; E341; E460; E551; E552; E553,antiagglomérant; E341; E460; E551; E552; E553,antiagglomerante; E341; E460; E551; E552; E553
+modified_starch,modified starch; e1400; e1401; e1402; e1403; e1404; e1410; e1412; e1414,modifizierte Stärke; E1400; E1404; E1410; E1412,amidon modifié; E1400; E1404; E1410; E1412,amido modificato; E1400; E1404; E1410; E1412
+humectant,humectant; e420; e421; e422; e1200; e1201; e1202; glycerol; sorbitol,Feuchthaltemittel; E420; E421; E422; Glycerol; Sorbitol,humectant; E420; E421; E422; glycérol; sorbitol,umettante; E420; E421; E422; glicerolo; sorbitolo

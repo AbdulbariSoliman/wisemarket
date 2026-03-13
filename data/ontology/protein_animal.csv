@@ -1,3 +1,8 @@
 term,en,de,fr,it
-whey,whey,Molke,lactosérum,siero
-casein,casein,Kasein,caséine,caseina
+whey,whey; whey protein; whey isolate; whey concentrate,Molke; Molkenprotein; Whey Isolat; Whey Konzentrat,lactosérum; protéine de lactosérum; isolat; concentrat,siero; proteina del siero; isolato; concentrato
+casein,casein; micellar casein; calcium caseinate,Kasein; Micellar Kasein; Kalziumkaseinat,caséine; caséine micellaire; caséinate de calcium,caseina; caseina micellare; caseinato di calcio
+egg_protein,egg protein; egg white protein; albumin,Eiprotein; Eiklärprotein; Albumin,protéine d'œuf; protéine de blanc d'œuf; albumine,proteina d'uovo; proteina dell'albume; albumina
+collagen,collagen; hydrolysed collagen; collagen peptides; gelatin,Kollagen; hydrolysiertes Kollagen; Kollagenpeptide; Gelatine,collagène; collagène hydrolysé; peptides de collagène; gélatine,collagene; collagene idrolizzato; peptidi di collagene; gelatina
+meat_protein,beef protein; chicken protein; animal protein,Rindfleischprotein; Hühnerprotein; tierisches Protein,protéine de bœuf; protéine de poulet; protéine animale,proteina di manzo; proteina di pollo; proteina animale
+milk_protein,milk protein; dairy protein; total milk protein,Milchprotein; Molkereiprotein; Gesamtmilchprotein,protéine de lait; protéine laitière; protéine totale du lait,proteina del latte; proteina casearia; proteina totale del latte
+crickets,cricket protein; insect protein; mealworm,Grillenpulver; Insektenprotein; Mehlwurm,protéine de grillon; protéine d'insecte; ver de farine,proteina di grillo; proteina di insetti; larva della farina

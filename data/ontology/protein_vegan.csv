@@ -1,3 +1,9 @@
 term,en,de,fr,it
-soy_protein,soy protein,Sojaprotein,protéine de soja,proteina di soia
-pea_protein,pea protein,Erbsenprotein,protéine de pois,proteina di pisello
+soy_protein,soy protein; soy protein isolate; soy protein concentrate,Sojaprotein; Sojaproteinisolat; Sojaproteinkonzentrat,protéine de soja; isolat de protéine de soja,proteina di soia; isolato proteico di soia
+pea_protein,pea protein; pea protein isolate,Erbsenprotein; Erbsenproteinisolat,protéine de pois; isolat de protéine de pois,proteina di pisello; isolato proteico di pisello
+rice_protein,rice protein; brown rice protein,Reisprotein; Vollkornreisprotein,protéine de riz; protéine de riz brun,proteina di riso; proteina di riso integrale
+hemp_protein,hemp protein; hemp seed protein,Hanfprotein; Hanfsamenprotein,protéine de chanvre; protéine de graine de chanvre,proteina di canapa; proteina di semi di canapa
+pumpkin_seed,pumpkin seed protein; pepitas,Kürbiskernprotein; Kürbiskerne,protéine de graine de courge; pepitas,proteina di semi di zucca; pepitas
+sunflower_protein,sunflower protein; sunflower seed protein,Sonnenblumenprotein; Sonnenblumenkernprotein,protéine de tournesol; protéine de graine de tournesol,proteina di girasole; proteina di semi di girasole
+algae_protein,algae protein; spirulina; chlorella,Algenprotein; Spirulina; Chlorella,protéine d'algue; spiruline; chlorelle,proteina di alghe; spirulina; clorella
+lupine_protein,lupin protein; lupine flour,Lupinenprotein; Lupinenmehl,protéine de lupin; farine de lupin,proteina di lupino; farina di lupino

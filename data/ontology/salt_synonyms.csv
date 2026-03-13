@@ -1,3 +1,9 @@
 term,en,de,fr,it
-salt,salt,Salz,sel,sale
-sodium,sodium,Natrium,sodium,sodio
+salt,salt; table salt; cooking salt; common salt,Salz; Kochsalz; Speisesalz; Tafelsalz,sel; sel de table; sel de cuisine,sale; sale da tavola; sale da cucina
+sodium,sodium; sodium chloride; NaCl,Natrium; Natriumchlorid; NaCl,sodium; chlorure de sodium; NaCl,sodio; cloruro di sodio; NaCl
+sea_salt,sea salt; fleur de sel; flor de sal,Meersalz; Fleur de Sel,sel de mer; fleur de sel,sale marino; fior di sale
+rock_salt,rock salt; himalayan salt; pink salt,Steinsalz; Himalayasalz; rosa Salz,sel gemme; sel rose de l'Himalaya,salgemma; sale dell'Himalaya; sale rosa
+low_salt,low salt; reduced salt; less salt; low sodium,salzarm; natriumarm; weniger Salz; salzreduziert,faible teneur en sel; sel réduit; sodium réduit,a basso contenuto di sale; sale ridotto; basso sodio
+no_salt,no salt; salt free; without salt; unsalted,ohne Salz; salzfrei; ungesalzen,sans sel; sans sel ajouté,senza sale; privo di sale; non salato
+celery_salt,celery salt; vegetable salt,Selleriesalz; Gemüsesalz,sel de céleri; sel végétal,sale di sedano; sale vegetale
+msg,monosodium glutamate; MSG; e621,Mononatriumglutamat; MSG; E621; Glutamat,glutamate monosodique; MSG; E621,glutammato monosodico; MSG; E621

@@ -1,3 +1,9 @@
 term,en,de,fr,it
-kids,kids,Kinder,enfants,bambini
-junior,junior,Junior,junior,junior
+kids,kids; children; child; for kids; for children,Kinder; für Kinder; Kids,enfants; pour enfants; kids,bambini; per bambini; kids
+junior,junior; junior formula,Junior; Junior-Formel,junior; formule junior,junior; formula junior
+baby,baby; infant; baby food; toddler,Baby; Kleinkind; Babynahrung,bébé; nourrisson; alimentation bébé,bambino; neonato; alimenti per bambini
+no_artificial,no artificial colors; no artificial flavors; no artificial additives,ohne künstliche Farben; ohne künstliche Aromen,sans colorants artificiels; sans arômes artificiels,senza coloranti artificiali; senza aromi artificiali
+no_preservatives,no preservatives; preservative free,ohne Konservierungsstoffe; konservierungsstofffrei,sans conservateurs,senza conservanti
+organic_kids,organic baby; organic toddler; bio baby,Bio-Baby; Bio-Kleinkind; biologisch für Kinder,bio bébé; biologique pour enfants,bio bambino; biologico per bambini
+reduced_sugar_kids,reduced sugar; less sugar for kids; no added sugar,weniger Zucker für Kinder; ohne Zuckerzusatz,sucre réduit; moins de sucre pour enfants,zucchero ridotto; senza zucchero aggiunto
+fortified,fortified; enriched with vitamins; added calcium,angereichert; mit Vitaminen angereichert; mit Kalzium,enrichi; enrichi en vitamines; avec du calcium,arricchito; arricchito con vitamine; con calcio

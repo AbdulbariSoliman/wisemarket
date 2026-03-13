@@ -1,2 +1,9 @@
 term,en,de,fr,it
-caffeine,caffeine,Koffein,caféine,caffeina
+caffeine,caffeine; caffeine added,Koffein; Koffein zugesetzt,caféine; caféine ajoutée,caffeina; caffeina aggiunta
+coffee,coffee; espresso; arabica; robusta; instant coffee,Kaffee; Espresso; Arabica; Robusta; Instantkaffee,café; espresso; arabica; robusta; café instantané,caffè; espresso; arabica; robusta; caffè solubile
+tea,tea; black tea; green tea; matcha; chai,Tee; Schwarztee; Grüntee; Matcha; Chai,thé; thé noir; thé vert; matcha; chaï,tè; tè nero; tè verde; matcha; chai
+guarana,guarana; guarana extract,Guarana; Guarana-Extrakt,guarana; extrait de guarana,guarana; estratto di guarana
+energy_drink,energy drink; high caffeine; taurine,Energy Drink; hoher Koffeingehalt; Taurin,boisson énergisante; haute teneur en caféine; taurine,energy drink; alto contenuto di caffeina; taurina
+yerba_mate,yerba mate; mate; maté,Yerba Mate; Mate,yerba maté; maté,yerba mate; mate
+cola,cola; coca cola; pepsi; cola nut,Cola; Kolanuss,cola; noix de cola,cola; noce di cola
+decaf,decaffeinated; decaf; caffeine free,entkoffeiniert; koffeinfrei,décaféiné; sans caféine,decaffeinato; senza caffeina

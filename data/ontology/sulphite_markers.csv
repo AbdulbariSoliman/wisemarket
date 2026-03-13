@@ -1,2 +1,10 @@
 term,en,de,fr,it
-sulphites,sulphites,Sulfite,sulfites,solfiti
+sulphites,sulphites; sulfites; sulphur dioxide,Sulfite; Schwefeldioxid,sulfites; dioxyde de soufre,solfiti; diossido di zolfo
+e220,E220; sulphur dioxide,E220; Schwefeldioxid,E220; dioxyde de soufre,E220; diossido di zolfo
+e221,E221; sodium sulphite,E221; Natriumsulfit,E221; sulfite de sodium,E221; solfito di sodio
+e222,E222; sodium bisulphite,E222; Natriumbisulfit,E222; bisulfite de sodium,E222; bisolfito di sodio
+e223,E223; sodium metabisulphite,E223; Natriummetabisulfit,E223; métabisulfite de sodium,E223; metabisolfito di sodio
+e224,E224; potassium metabisulphite,E224; Kaliummetabisulfit,E224; métabisulfite de potassium,E224; metabisolfito di potassio
+e226,E226; calcium sulphite,E226; Calciumsulfit,E226; sulfite de calcium,E226; solfito di calcio
+wine_sulphites,contains sulphites; wine contains sulphites,enthält Sulfite; Wein enthält Sulfite,contient des sulfites; vin contient des sulfites,contiene solfiti; vino contiene solfiti
+dried_fruit,dried fruit; raisins; apricots; prunes,Trockenfrüchte; Rosinen; Aprikosen; Pflaumen,fruits secs; raisins; abricots; pruneaux,frutta secca; uva passa; albicocche; prugne

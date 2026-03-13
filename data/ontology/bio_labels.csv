@@ -1,4 +1,10 @@
 term,en,de,fr,it
-bio,organic,Bio,biologique,biologico
-naturaplan,Naturaplan; Coop Bio,Naturaplan,Naturaplan,Naturaplan
-migros_bio,Migros Bio,Migros Bio,Migros Bio,Migros Bio
+bio,organic; bio; biological; certified organic,Bio; biologisch; zertifiziert Bio,biologique; bio; certifié biologique,biologico; bio; certificato biologico
+naturaplan,Naturaplan; Coop Bio; Coop Naturaplan,Naturaplan; Coop Bio,Naturaplan; Coop Bio,Naturaplan; Coop Bio
+migros_bio,Migros Bio; M-Bio,Migros Bio; M-Bio,Migros Bio; M-Bio,Migros Bio; M-Bio
+bio_suisse,Bio Suisse; Knospe; Swiss organic,Bio Suisse; Knospe; Schweizer Bio,Bio Suisse; Bourgeon; bio suisse,Bio Suisse; Gemma; bio svizzero
+demeter,Demeter; biodynamic,Demeter; biodynamisch,Demeter; biodynamique,Demeter; biodinamico
+eu_organic,EU organic; EU bio logo,EU-Bio; EU-Bio-Logo,bio UE; logo bio UE,bio UE; logo bio UE
+aldi_bio,Aldi Bio; Aldi organic; Nature's Pick,Aldi Bio; Aldi Natur,Aldi Bio; Aldi nature,Aldi Bio; Aldi natura
+no_gmo,no GMO; non-GMO; GMO free; without genetically modified,ohne GVO; GVO-frei; nicht gentechnisch verändert,sans OGM; non-OGM; exempt d'OGM,senza OGM; non-OGM; privo di OGM
+no_pesticides,no pesticides; pesticide free,ohne Pestizide; pestizidfreit,sans pesticides,senza pesticidi

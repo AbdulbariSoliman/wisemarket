@@ -1,4 +1,9 @@
 term,en,de,fr,it
-free_range,free range; outdoor,Freilandhaltung; Auslauf,plein air,allevamento all'aperto
-bts,animal friendly housing,besonders tierfreundlich,bien-être animal,benessere animale
-pasture,pasture raised,Weidehaltung,élevé au pâturage,allevato al pascolo
+free_range,free range; outdoor; pasture raised; outdoor access,Freilandhaltung; Auslauf; Weidehaltung,plein air; élevé en plein air; pâturage,allevamento all'aperto; pascolo; libero accesso all'esterno
+bts,BTS; besonders tierfreundlich; animal friendly housing,BTS; besonders tierfreundlich,BTS; logement respectueux des animaux,BTS; stabulazione particolarmente rispettosa degli animali
+raus,RAUS; regular outdoor access; pasture,RAUS; regelmässiger Auslauf,RAUS; accès régulier à l'extérieur,RAUS; accesso regolare all'esterno
+pasture,pasture raised; grass fed; grass-fed; meadow,Weidehaltung; Weidefleisch; grasgefüttert,élevé au pâturage; nourri à l'herbe,allevato al pascolo; nutrito con erba
+organic_animal,organic farming; organic livestock; bio animal,Bio-Tierhaltung; biologische Landwirtschaft,élevage biologique; agriculture biologique,allevamento biologico; agricoltura biologica
+no_antibiotics,no antibiotics; antibiotic free; raised without antibiotics,ohne Antibiotika; antibiotikafrei,sans antibiotiques; élevé sans antibiotiques,senza antibiotici; allevato senza antibiotici
+humane,humanely raised; animal welfare certified; ethical,artgerecht; tierschutzzertifiziert,élevé humainement; certifié bien-être animal,allevato umanamente; certificato benessere animale
+swiss_animal,Swiss animal protection; Schweizer Tierschutz; STS,Schweizer Tierschutz; STS,protection suisse des animaux; STS,protezione svizzera degli animali; STS

@@ -1,2 +1,9 @@
 term,en,de,fr,it
-low_sugar,low sugar,zuckerarm,pauvre en sucre,povero di zucchero
+low_sugar,low sugar; reduced sugar; less sugar,zuckerarm; zuckerreduziert; weniger Zucker,pauvre en sucre; teneur réduite en sucre,a basso contenuto di zucchero; zucchero ridotto
+no_added_sugar,no added sugar; without added sugar; unsweetened,ohne Zuckerzusatz; ungesüßt; kein Zucker zugesetzt,sans sucres ajoutés; non sucré,senza zuccheri aggiunti; non zuccherato
+sugar_free,sugar free; zero sugar; sugarless,zuckerfrei; ohne Zucker,sans sucre; zéro sucre,senza zucchero; zero zucchero
+natural_sweetener,stevia; erythritol; xylitol; monk fruit; lo han guo,Stevia; Erythritol; Xylitol; Mönchsfrucht,stévia; érythritol; xylitol; fruit du moine,stevia; eritritolo; xilitolo; frutto del monaco
+low_gi,low glycemic; low GI; low glycemic index,niedriger GI; niedriger glykämischer Index,indice glycémique bas; faible IG,basso indice glicemico; basso IG
+diabetic,diabetic; suitable for diabetics,diabetiker; für Diabetiker geeignet,diabétique; convient aux diabétiques,diabetico; adatto ai diabetici
+no_fructose,no fructose; fructose free; fructose-free,fruktosfrei; ohne Fruktose,sans fructose,senza fruttosio
+sweetened_with,sweetened with stevia; sweetened with xylitol,gesüßt mit Stevia; gesüßt mit Xylitol,sucré à la stévia; sucré au xylitol,dolcificato con stevia; dolcificato con xilitolo

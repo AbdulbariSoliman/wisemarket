@@ -1,2 +1,17 @@
 term,en,de,fr,it
-aged_cheese,aged cheese,gereifter Käse,fromage affiné,formaggio stagionato
+aged_cheese,aged cheese; parmesan; gouda; camembert; brie; roquefort; emmental,gereifter Käse; Parmesan; Gouda; Camembert; Brie; Emmental,fromage affiné; parmesan; gouda; camembert; brie; roquefort,formaggio stagionato; parmigiano; gouda; camembert; brie
+processed_meat,salami; pepperoni; chorizo; mortadella; sausage; hot dog; smoked meat,Salami; Pepperoni; Chorizo; Mortadella; Wurst; Räucherfleisch,salami; pepperoni; chorizo; mortadelle; saucisse fumée,salame; pepperoni; chorizo; mortadella; carne affumicata
+fermented_fish,fermented fish; anchovies; sardines; fish sauce; worcestershire,fermentierter Fisch; Sardellen; Fischsauce; Worcestershire,poisson fermenté; anchois; sauce de poisson,pesce fermentato; acciughe; salsa di pesce
+alcohol,wine; beer; champagne; spirits; fermented alcohol,Wein; Bier; Champagner; Spirituosen,vin; bière; champagne; alcool fermenté,vino; birra; champagne; alcol fermentato
+vinegar,vinegar; wine vinegar; balsamic vinegar; apple cider vinegar,Essig; Weinessig; Balsamico-Essig; Apfelessig,vinaigre; vinaigre de vin; vinaigre balsamique,aceto; aceto di vino; aceto balsamico
+yeast_extract,yeast extract; marmite; vegemite; brewer's yeast,Hefeextrakt; Bierhefe,extrait de levure; levure de bière,estratto di lievito; lievito di birra
+tomato,tomato; tomato paste; ketchup; tomato sauce; sun-dried tomato,Tomate; Tomatenmark; Ketchup; Tomatensauce,tomate; concentré de tomate; ketchup; sauce tomate,pomodoro; concentrato di pomodoro; ketchup; salsa di pomodoro
+spinach,spinach,Spinat,épinard,spinaci
+avocado,avocado; guacamole,Avocado; Guacamole,avocat; guacamole,avocado; guacamole
+strawberry,strawberry; raspberry; cranberry,Erdbeere; Himbeere; Cranberry,fraise; framboise; canneberge,fragola; lampone; mirtillo rosso
+citrus,lemon; lime; orange; grapefruit,Zitrone; Limette; Orange; Grapefruit,citron; lime; orange; pamplemousse,limone; lime; arancia; pompelmo
+chocolate,chocolate; cocoa; dark chocolate,Schokolade; Kakao; Zartbitterschokolade,chocolat; cacao; chocolat noir,cioccolato; cacao; cioccolato fondente
+nuts_histamine,walnut; cashew; peanut,Walnuss; Cashew; Erdnuss,noix; cajou; cacahuète,noce; anacardo; arachide
+soy_sauce,soy sauce; tamari; teriyaki sauce,Sojasoße; Tamari; Teriyaki-Sauce,sauce soja; tamari; sauce teriyaki,salsa di soia; tamari; salsa teriyaki
+spices,cinnamon; cloves; anise; nutmeg; curry,Zimt; Nelken; Anis; Muskat; Curry,cannelle; clou de girofle; anis; noix de muscade; curry,cannella; chiodi di garofano; anice; noce moscata; curry
+additives,e102; e110; e122; e123; e124; e127; benzoates; e210; e211,E102; E110; E122; E123; E124; Benzoate,E102; E110; E122; E123; benzoates,E102; E110; E122; E123; benzoati

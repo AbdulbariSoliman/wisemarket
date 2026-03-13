@@ -1,4 +1,11 @@
 term,en,de,fr,it
-vitamin_c,vitamin C,Vitamin C,vitamine C,vitamina C
-zinc,zinc,Zink,zinc,zinco
-probiotic,probiotic,probiotisch,probiotique,probiotico
+vitamin_c,vitamin C; ascorbic acid,Vitamin C; Ascorbinsäure,vitamine C; acide ascorbique,vitamina C; acido ascorbico
+zinc,zinc; zinc gluconate; zinc bisglycinate,Zink; Zinkgluconat,zinc; gluconate de zinc,zinco; gluconato di zinco
+probiotic,probiotic; live cultures,Probiotikum; lebende Kulturen,probiotique; cultures vivantes,probiotico; culture vive
+vitamin_d,vitamin D; vitamin D3; cholecalciferol,Vitamin D; Vitamin D3; Cholecalciferol,vitamine D; vitamine D3; cholécalciférol,vitamina D; vitamina D3; colecalciferolo
+elderberry,elderberry; elderflower; sambucus nigra,Holunder; Schwarzer Holunder; Sambucus nigra,sureau noir; sambucus nigra,sambuco nero; sambucus nigra
+echinacea,echinacea; echinacea purpurea,Echinacea; Sonnenhut,échinacée; echinacea purpurea,echinacea; echinacea purpurea
+beta_glucan,beta glucan; beta-glucan; oat beta glucan,Beta-Glucan; Hafer-Beta-Glucan,bêta-glucane; bêta-glucane d'avoine,beta-glucano; beta-glucano d'avena
+selenium_immune,selenium; selenomethionine,Selen; Selenomethionin,sélénium; sélénométhionine,selenio; selenometionina
+vitamin_a_immune,vitamin A; beta-carotene; retinol,Vitamin A; Beta-Carotin; Retinol,vitamine A; bêta-carotène; rétinol,vitamina A; beta-carotene; retinolo
+copper_immune,copper; copper bisglycinate,Kupfer; Kupferbisglycin,cuivre; bisglycinate de cuivre,rame; bisglicinato di rame

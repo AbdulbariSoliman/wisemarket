@@ -1,3 +1,8 @@
 term,en,de,fr,it
-ml,ml; milliliter,ml; Milliliter,ml,ml
-l,liter; litre,Liter,litre,litro
+ml,ml; milliliter; millilitre; mL,ml; Milliliter; mL,ml; millilitre; mL,ml; millilitro; mL
+cl,cl; centiliter; centilitre; cL,cl; Zentiliter; cL,cl; centilitre; cL,cl; centilitro; cL
+dl,dl; deciliter; decilitre; dL,dl; Deziliter; dL,dl; décilitre; dL,dl; decilitro; dL
+l,l; liter; litre; L,l; Liter; L,l; litre; L,l; litro; L
+fl_oz,fl oz; fluid ounce; fluid oz,fl oz; Flüssigunze,fl oz; once liquide,fl oz; oncia liquida
+per_100ml,per 100ml; per 100 ml; /100ml,pro 100ml; pro 100 ml; /100ml,pour 100ml; pour 100 ml; /100ml,per 100ml; per 100 ml; /100ml
+serving_ml,per serving; per glass; per portion; serving size,pro Portion; pro Glas; Portionsgröße,par portion; par verre; taille de la portion,per porzione; per bicchiere; dimensione della porzione

@@ -1,3 +1,9 @@
 term,en,de,fr,it
-vegetarian,vegetarian,vegetarisch,végétarien,vegetariano
-ovo_lacto,ovo-lacto vegetarian,ovo-lacto vegetarisch,ovo-lacto végétarien,ovo-latto vegetariano
+vegetarian,vegetarian; lacto-ovo vegetarian,vegetarisch; lakto-ovo-vegetarisch,végétarien; lacto-ovo végétarien,vegetariano; latto-ovo vegetariano
+ovo_lacto,ovo-lacto vegetarian; eggs and dairy,ovo-lakto-vegetarisch; Eier und Milch,ovo-lacto végétarien; œufs et produits laitiers,ovo-latto vegetariano; uova e latticini
+v_label_veg,V-Label vegetarian; vegetarian society approved,V-Label vegetarisch; Vegetarian Society,V-Label végétarien; Vegetarian Society,V-Label vegetariano; Vegetarian Society
+no_meat,no meat; meat free; without meat,ohne Fleisch; fleischfrei,sans viande,senza carne
+no_fish,no fish; fish free; without fish,ohne Fisch; fischfrei,sans poisson,senza pesce
+no_slaughter,no slaughter; no animal slaughter,ohne Schlachtung; ohne Tierschlachtung,sans abattage; sans abattage animal,senza macellazione; senza macellazione animale
+rennet_free,vegetarian rennet; microbial rennet; rennet free,vegetarisches Lab; mikrobielles Lab; ohne Lab,présure végétarienne; présure microbienne,caglio vegetariano; caglio microbico; senza caglio
+plant_based,plant based; plant-based; 100% plant,pflanzlich; 100% pflanzlich,végétal; à base de plantes; 100% végétal,vegetale; a base di piante; 100% vegetale

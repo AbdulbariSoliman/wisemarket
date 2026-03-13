@@ -1,3 +1,9 @@
 term,en,de,fr,it
-g,g; gram,g; Gramm,g,g
-kg,kg; kilogram,kg; Kilogramm,kg,kg
+g,g; gram; grams; gr,g; Gramm; gr,g; gramme; grammes; gr,g; grammo; grammi; gr
+kg,kg; kilogram; kilograms; kilo,kg; Kilogramm; Kilo,kg; kilogramme; kilogrammes; kilo,kg; chilogrammo; chilogrammi; chilo
+mg,mg; milligram; milligrams,mg; Milligramm,mg; milligramme; milligrammes,mg; milligrammo; milligrammi
+oz,oz; ounce; ounces,oz; Unze; Unzen,oz; once; onces,oz; oncia; once
+lb,lb; lbs; pound; pounds,lb; lbs; Pfund,lb; lbs; livre; livres,lb; lbs; libbra; libbre
+per_100g,per 100g; per 100 grams; /100g,pro 100g; pro 100 Gramm; /100g,pour 100g; pour 100 grammes; /100g,per 100g; per 100 grammi; /100g
+serving_g,per serving; per portion; serving size,pro Portion; Portionsgröße; Portion,par portion; taille de la portion,per porzione; dimensione della porzione
+net_weight,net weight; net; e mark; net wt,Nettogewicht; Netto; e-Zeichen,poids net; net; marque e,peso netto; netto; marchio e

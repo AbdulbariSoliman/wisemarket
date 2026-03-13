@@ -1,3 +1,9 @@
 term,en,de,fr,it
-chf,CHF,CHF,CHF,CHF
-per_100g,per 100g,pro 100g,pour 100g,per 100g
+chf,CHF; Swiss franc; Fr.,CHF; Schweizer Franken; Fr.,CHF; franc suisse; Fr.,CHF; franco svizzero; Fr.
+per_100g,per 100g; per 100 grams; /100g,pro 100g; pro 100 Gramm; /100g,pour 100g; pour 100 grammes; /100g,per 100g; per 100 grammi; /100g
+per_100ml,per 100ml; per 100 milliliters; /100ml,pro 100ml; pro 100 Milliliter; /100ml,pour 100ml; pour 100 millilitres; /100ml,per 100ml; per 100 millilitri; /100ml
+per_piece,per piece; per unit; each; per item,pro Stück; pro Einheit; je Stück,par pièce; par unité; chacun,per pezzo; per unità; ciascuno
+per_kg,per kg; per kilogram; /kg,pro kg; pro Kilogramm; /kg,par kg; par kilogramme; /kg,per kg; per chilogrammo; /kg
+per_liter,per liter; per litre; /l,pro Liter; /l,par litre; /l,per litro; /l
+aktion,Aktion; promotion; Sonderangebot; sale,Aktion; Sonderangebot; Rabatt,action; promotion; offre spéciale,azione; promozione; offerta speciale
+statt,instead of; was; statt; regular price,statt; regulärer Preis; vorher,au lieu de; prix habituel; ancien prix,anziché; prezzo regolare; prima

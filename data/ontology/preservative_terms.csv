@@ -1,3 +1,9 @@
 term,en,de,fr,it
-preservative,preservative,Konservierungsstoff,conservateur,conservante
-nitrite,nitrite,Nitrit,nitrite,nitrito
+preservative,preservative; food preservative,Konservierungsstoff; Lebensmittelkonservierung,conservateur; conservateur alimentaire,conservante; conservante alimentare
+nitrite,nitrite; sodium nitrite; e250; curing salt,Nitrit; Natriumnitrit; E250; Pökelsalz,nitrite; nitrite de sodium; E250; sel nitrité,nitrito; nitrito di sodio; E250; sale da cura
+nitrate,nitrate; potassium nitrate; e252,Nitrat; Kaliumnitrat; E252,nitrate; nitrate de potassium; E252,nitrato; nitrato di potassio; E252
+sorbate,sorbate; potassium sorbate; e202,Sorbat; Kaliumsorbat; E202,sorbate; sorbate de potassium; E202,sorbato; sorbato di potassio; E202
+benzoate,benzoate; sodium benzoate; e211,Benzoat; Natriumbenzoat; E211,benzoate; benzoate de sodium; E211,benzoato; benzoato di sodio; E211
+no_preservatives,no preservatives; preservative free; without preservatives,ohne Konservierungsstoffe; konservierungsstofffrei,sans conservateurs; exempt de conservateurs,senza conservanti; privo di conservanti
+tocopherol_preservative,tocopherol; e306; e307; e308; e309; natural preservative,Tocopherol; E306; natürliches Konservierungsmittel,tocophérol; E306; conservateur naturel,tocoferolo; E306; conservante naturale
+rosemary_extract,rosemary extract; e392; natural antioxidant,Rosmarinextrakt; E392; natürliches Antioxidans,extrait de romarin; E392; antioxydant naturel,estratto di rosmarino; E392; antiossidante naturale

@@ -1,2 +1,7 @@
 term,en,de,fr,it
-multipack,multipack,Mehrpack,multipack,multipack
+multipack,multipack; multi-pack; multipacks,Mehrpack; Multipack,multipack; emballage multiple,multipack; confezione multipla
+value_pack,value pack; family pack; economy pack,Vorteilspack; Familienpack; Sparpack,pack économique; pack familial,confezione risparmio; confezione famiglia
+twin_pack,twin pack; double pack; 2-pack,Doppelpack; Zweierpack,double pack; lot de 2,confezione doppia; bi-pack
+bundle,bundle; bundle offer; bundle deal,Bundle; Bündelangebot,offre groupée; lot,bundle; offerta bundle
+combo,combo; combo pack; combo deal,Kombi; Kombipack,offre combo; pack combo,combo; confezione combo
+set,set; gift set; starter set,Set; Geschenkset; Starterpaket,set; coffret; set de démarrage,set; set regalo; set starter
