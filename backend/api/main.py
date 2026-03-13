@@ -262,7 +262,7 @@ def analyze_product(
         raise HTTPException(status_code=500, detail="Ontology matching failed") from e
 
     try:
-        verdicts = app.state.decision_engine.evaluate(matches)
+        verdicts = app.state.decision_engine.evaluate(matches, lang=lang)
     except Exception as e:
         logger.exception("Decision engine failed for GTIN %s", gtin)
         raise HTTPException(status_code=500, detail="Decision evaluation failed") from e
