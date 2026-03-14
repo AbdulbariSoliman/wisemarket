@@ -1,10 +1,7 @@
+# WiseMarket — Technical Steps Documentation
 
 
-# Swiss-Basket-AI — Technical Steps Documentation
-
-## Purpose
-
-This document records the technical build steps completed so far in Swiss-Basket-AI, including:
+This document records the technical build steps completed so far in WiseMarket, including:
 
 * what was built
 * why it was needed
@@ -142,19 +139,9 @@ It is used for:
 * price history
 * normalized ingredient storage
 * runtime API fetching
-* future user memory
-* future feedback / ratings
-* future authentication
-
-## Why
-
-The project needed a persistent database that can support:
-
-* structured product records
-* pricing history
-* JSON fields for nutrition and normalized ingredients
-* future API access
-* future user and scan history
+* user memory
+* feedback / ratings
+* authentication (future)
 
 ## Why Supabase
 
@@ -163,131 +150,159 @@ Supabase provides:
 * managed PostgreSQL
 * simple setup
 * SQL support
-* future auth support
-* future storage support
-* future vector search support
+* auth support
+* storage support
+* vector search support (future)
 
 ---
 
-# Step 6 — Supabase tables (concept and current structure)
+# Step 6 — Database schema design and deployment
 
-## Main product intelligence tables
+## What was done
 
-### `products_new`
+Two complete PostgreSQL schemas were designed, reviewed, and deployed to Supabase.
 
-Stores the main product record.
+### Schema 1 — Products + ETL + Price Calculator
 
-Typical fields include:
+**File:** `database/schema_1_v2_1_migration_safe.sql`
 
-* `id`
-* `gtin`
-* `store`
-* `name_en`
-* `name_de`
-* `name_fr`
-* `name_it`
-* `brand`
-* `category`
-* `ingredients_raw`
-* `ingredients_normalized`
-* `ontology_tags`
-* `allergens`
-* `nutrition`
-* `is_active`
-* `ontology_version`
-* `created_at`
-* `updated_at`
+**Schemas created:**
 
-### Why this table exists
+* `public` — live app tables
+* `etl` — scraper pipeline tables
+* `archive` — legacy read-only tables
 
-This is the main table used by the runtime API to fetch product data for live analysis.
+**Key tables:**
 
-It stores:
+| Table | Purpose |
+|---|---|
+| `products` | Master product catalogue (GTIN + store keyed) |
+| `barcode_aliases` | Normalises raw barcodes to GTIN |
+| `unified_products` | Cross-store canonical product records |
+| `unified_product_members` | Maps store products to canonical records |
+| `nutrition_facts` | Master nutrition data (per 100g + per serving) |
+| `product_prices` | Current prices with auto-computed price_per_100g |
+| `price_history` | One price snapshot per product/store/day |
+| `store_price_snapshot` | Cross-store JSONB comparison per GTIN |
+| `ontology_versions` | Versioning for ontology rule changes |
+| `ontology_current` | Single-row table enforcing one active version |
+| `user_preferences` | Dietary flags + store prefs + GDPR consent |
+| `user_scans` | Every barcode scan per user |
+| `user_searches` | Every search query per user |
+| `user_saved_products` | Bookmarked products |
+| `user_feedback` | Verdict dispute reports |
+| `user_lists` | Shopping lists |
+| `user_list_items` | Items inside shopping lists |
+| `user_chat_history` | Conversation history for LLM context |
+| `consent_audit_log` | GDPR Article 7 consent proof |
+| `data_access_log` | GDPR Article 30 access log |
+| `data_deletion_log` | GDPR right to erasure tracking |
+| `privacy_policy_versions` | Versioned privacy policy with 4-language summaries |
+| `agent_execution_log` | Every request through the agent pipeline |
+| `etl.scraper_sources` | Registry of stores + scrape config |
+| `etl.scraper_jobs` | Every scraper run with counters |
+| `etl.scraper_change_log` | What changed in each scrape run |
+| `etl.scrape_failures` | Detailed scraper error tracking |
+| `etl.staging_products` | Raw scraper output before validation |
+| `etl.ontology_improvement_queue` | User/system signals for ontology updates |
 
-* raw product label data
-* parsed/normalized ingredient data
-* nutrition data
-* multilingual names
-* store identity
+**Key triggers:**
 
----
+* `fn_compute_unit_prices` — auto-computes `price_per_100g` on every price insert
+* `fn_append_price_history` — auto-writes to `price_history` on every price write
+* `fn_sync_nutrition_cache` — syncs `nutrition_facts` changes to `products.nutrition_cache`
+* `fn_clear_nutrition_cache` — nulls cache on nutrition delete
+* `fn_validate_price_product_ref` — enforces gtin/store consistency on prices
+* `fn_sync_unified_master` — keeps `master_product_id` in sync with `is_master` flag
+* `fn_rebuild_price_snapshot` — callable function to rebuild cross-store comparison
 
-### `product_prices`
+**Price calculator views:**
 
-Stores price history for products.
+* `v_price_comparison` — cross-store comparison using latest snapshot
+* `v_price_history_stats` — rolling 28-day average, direction signal, all-time low/high
+* `v_best_value` — ranks stores by price_per_100g, powers best-value badge
+* `v_basket_prices` — basket calculator feed with dietary tag filtering
+* `v_active_promotions` — current promotions sorted by discount
 
-Typical fields include:
+**ETL views:**
 
-* `id`
-* `product_id`
-* `price`
-* `currency`
-* `promotion_info`
-* `price_date`
-* `price_last_checked`
-* `unit_price`
+* `v_ontology_priority` — pending ontology improvements by urgency
+* `v_scraper_health` — live scraper status per store
 
-### Why this table exists
+### Schema 2 — Analytics + Events
 
-Prices change more often than ingredients or product identity.
+**File:** `database/schema_02_analytics_events.sql`
 
-Separating prices from products allows:
+**Schemas created:**
 
-* historical tracking
-* future deal logic
-* future cheapest-store comparison
-* reduced duplication
+* `events` — raw append-only event stream
+* `analytics` — nightly aggregated tables
 
----
+**Design principle:** App writes to `events.*` only. Analytics worker reads events and writes aggregates. Views read from aggregates only.
 
-### `nutrition_facts` (optional)
+**Event tables (12):**
 
-Stores structured nutrition if kept separately.
+* `events.user_events`
+* `events.session_events`
+* `events.scan_events`
+* `events.search_events`
+* `events.chat_events`
+* `events.product_events`
+* `events.feedback_events`
+* `events.price_events`
+* `events.feature_events`
+* `events.error_events`
+* `events.api_events`
+* `events.allergen_alert_events`
 
-Typical fields include:
+**Analytics aggregate tables (17):**
 
-* `id`
-* `product_id`
-* `per_100g`
-* `per_serving`
-* `last_updated`
+* `analytics.user_growth`
+* `analytics.retention_cohorts`
+* `analytics.product_performance`
+* `analytics.session_quality`
+* `analytics.feature_popularity`
+* `analytics.search_patterns`
+* `analytics.category_analytics`
+* `analytics.verdict_analytics`
+* `analytics.dietary_trends`
+* `analytics.price_analytics`
+* `analytics.swiss_regional`
+* `analytics.llm_quality`
+* `analytics.allergen_risk`
+* `analytics.verdict_disputes`
+* `analytics.api_usage`
+* `analytics.b2b_report_access`
+* `analytics.app_behaviour`
+* `analytics.rebuild_log`
 
-### Why this table exists
+**Smart views (12):**
 
-Nutrition can remain inside `products_new.nutrition`, but a separate table is useful if nutrition handling becomes more detailed later.
+* `v_user_growth`
+* `v_feature_popularity`
+* `v_session_quality`
+* `v_product_popularity`
+* `v_app_mode_usage`
+* `v_disputed_verdicts`
+* `v_allergen_risk`
+* `v_llm_quality`
+* `v_swiss_dietary_demand`
+* `v_ontology_priority`
+* `v_price_intelligence`
+* `v_error_health`
+* `v_api_performance`
 
----
+### Also deployed
 
-### `ontology_versions` (optional)
+**File:** `database/patch_001_image_fields.sql`
 
-Tracks ontology versioning.
+Added to `products`:
 
-Typical fields include:
+* `image_source` — enum: `retailer_url`, `open_food_facts`, `gs1`, `internal`
+* `image_url_verified_at` — last time URL returned 200
+* `image_url_is_dead` — flagged when URL goes 404
 
-* `version`
-* `applied_at`
-* `notes`
-
-### Why this table exists
-
-If ontology rules change later, products can be traced back to the ontology version used during analysis.
-
----
-
-## Legacy / earlier concept tables
-
-Earlier planning also included concepts such as:
-
-* `products`
-* `price_history`
-* `policy_tags`
-* `unified_products`
-* `scrape_failures`
-
-These helped shape the final design, but the current runtime pipeline is centered on:
-
-* `products_new`
-* `product_prices`
+**Legal note:** Images are never downloaded or stored. Only URLs are stored. Copyright belongs to retailers.
 
 ---
 
@@ -310,65 +325,124 @@ backend/etl/split_by_store.py
 backend/etl/supabase_ingest.py
 ```
 
-## Why
-
-The ETL populates Supabase with structured data that the API can analyze.
-
-## Important implementation points
-
-* safe JSON handling
-* batch upserts
-* three-store processing:
-
-  * Migros
-  * Coop
-  * Aldi
-* product and price ingestion
-
 ## Result
 
-The ETL completed successfully and product analysis data became queryable from Supabase.
+ETL completed successfully. Product analysis data became queryable from Supabase.
 
 ---
 
-# Step 8 — Runtime folder structure cleanup
+# Step 8 — Seed data
 
 ## What was done
 
-The backend structure was cleaned up and extended to support runtime logic.
+Realistic Swiss supermarket seed data was created and deployed to Supabase.
 
-New runtime folders were created:
+**File:** `database/seed_data.sql`
 
-```text
-backend/api/
-backend/services/
+## What was seeded
+
+| Table | Rows |
+|---|---|
+| `products` | 51 |
+| `product_prices` | 51 |
+| `nutrition_facts` | 51 |
+| `unified_products` | 23 |
+| `store_price_snapshot` | 23 |
+| `user_preferences` | 3 |
+| `user_scans` | 8 |
+| `user_saved_products` | 8 |
+| `user_lists` | 3 |
+| `user_list_items` | 12 |
+
+## Stores covered
+
+* Migros
+* Coop
+* Aldi
+* Lidl
+
+## Categories covered
+
+Dairy, dairy alternative, meat, fish, bakery, fresh produce, pantry, beverages, snacks, frozen, plant protein
+
+## Dietary tags
+
+`halal`, `vegan`, `vegetarian`, `gluten_free`, `lactose_free`, `organic`, `high_protein`, `low_sugar`, `dairy_free`, `nut_free`
+
+## Promotions
+
+4 active promotions with discount_pct, promotion_label, promotion_ends
+
+## Price history
+
+30 days of price snapshots on key products (milk, chicken, olive oil, pasta) showing price movements
+
+## Verification query
+
+```sql
+SELECT
+    (SELECT COUNT(*) FROM products)             AS products,
+    (SELECT COUNT(*) FROM product_prices)       AS prices,
+    (SELECT COUNT(*) FROM nutrition_facts)      AS nutrition,
+    (SELECT COUNT(*) FROM unified_products)     AS unified,
+    (SELECT COUNT(*) FROM store_price_snapshot) AS snapshots;
 ```
-
-Package initializers were added:
-
-```text
-backend/api/__init__.py
-backend/services/__init__.py
-```
-
-## Why
-
-The earlier repository structure had ingestion and ontology loading, but did not yet have a clean place for runtime business logic and API code.
-
-The separation now is:
-
-* `etl/` → ingestion
-* `normalizer/` → ontology loading
-* `services/` → runtime intelligence logic
-* `api/` → FastAPI endpoints
 
 ---
 
-# Step 9 — Ingredient parser design
+# Step 9 — Repository structure cleanup
 
 ## What was done
 
-A deterministic ingredient parser was designed and implemented.
+Repository was reorganised before building the API.
+
+**Removed:**
+
+* `..env.swp` — vim swap file
+* `.generate_master_ontology.py.swp` — vim swap file
+* `main` — empty root file
+* `venv/` — duplicate virtualenv (`.venv/` is correct)
+
+**Added:**
+
+* `backend/api/routes/` — route modules
+* `backend/models/` — Pydantic schemas
+* `database/` — all SQL files
+* `requirements.txt`
+* `Dockerfile`
+* `.dockerignore`
+
+**Virtualenv fixed:**
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install fastapi uvicorn supabase python-dotenv pydantic slowapi sentry-sdk pytest httpx reportlab qrcode pillow
+```
+
+---
+
+# Step 10 — Store configuration
+
+## File
+
+```text
+backend/config/stores.py
+```
+
+## Current stores
+
+| Store | Public | Scrape type |
+|---|---|---|
+| migros | ✅ | playwright |
+| coop | ✅ | playwright |
+| aldi | ✅ | httpx_bs4 |
+| lidl | ✅ | httpx_bs4 |
+| denner | ❌ | httpx_bs4 (pending) |
+
+---
+
+# Step 11 — Ingredient parser
 
 ## File
 
@@ -376,83 +450,31 @@ A deterministic ingredient parser was designed and implemented.
 backend/services/ingredient_parser.py
 ```
 
-## Why
+## Features
 
-Raw ingredient labels from Swiss retailers are messy and often include:
-
-* nested parentheses
-* percentages
-* additives / E-numbers
-* punctuation
-* formatting noise
-
-The parser converts raw ingredient label text into normalized ingredient tokens.
-
-## Implemented features
-
-* lowercase normalization
+* lowercase normalisation
 * split outside parentheses
 * flatten nested ingredients
-* remove percentages and simple units
-* normalize E-number variants
+* remove percentages and units
+* normalise E-number variants (E 322 → e322)
 * preserve order
-* deduplicate without losing sequence
+* deduplicate
 
 ## Example
 
 Input:
-
 ```text
 Milk chocolate (sugar, cocoa butter, milk powder, E 322), hazelnuts (10%), salt.
 ```
 
 Output:
-
 ```python
 ['milk chocolate', 'hazelnuts', 'salt', 'sugar', 'cocoa butter', 'milk powder', 'e322']
 ```
 
 ---
 
-# Step 10 — Ingredient parser testing
-
-## What was done
-
-The parser was locked with automated tests.
-
-## File
-
-```text
-tests/test_ingredient_parser.py
-```
-
-## Test coverage
-
-* simple ingredient list
-* nested parentheses
-* semicolon splitting
-* E-number normalization
-* empty input
-
-## Command
-
-```bash
-python -m pytest tests/test_ingredient_parser.py -q
-```
-
-## Result
-
-```text
-5 passed
-```
-
----
-
-# Step 11 — Ontology router design
-
-## What was done
-
-An ontology router was created to decide which ontology groups should be checked for a product.
+# Step 12 — Ontology router
 
 ## File
 
@@ -460,18 +482,7 @@ An ontology router was created to decide which ontology groups should be checked
 backend/services/ontology_router.py
 ```
 
-## Why
-
-Checking all ontology groups for every product is unnecessary and harder to maintain.
-
-The router improves the system by:
-
-* always running universal checks
-* adding category-specific ontology groups
-
-## Universal groups used
-
-Examples:
+## Universal groups (always checked)
 
 * allergens
 * animal_products
@@ -480,53 +491,30 @@ Examples:
 * sugar_synonyms
 * salt_synonyms
 
-## Category examples
+## Category routing (v2 — expanded)
 
-* Dairy → lactose / vegan / vegetarian related groups
-* Seafood → fish / shellfish / histamine
-* Meat → meat / pork
-* Snacks → nuts / superfood markers
-
----
-
-# Step 12 — Ontology router testing
-
-## What was done
-
-Tests were added for the router.
-
-## File
-
-```text
-tests/test_ontology_router.py
-```
-
-## Test coverage
-
-* empty category
-* dairy category
-* seafood category
-* unknown category
-
-## Command
-
-```bash
-python -m pytest tests/test_ontology_router.py -q
-```
-
-## Result
-
-```text
-4 passed
-```
+| Category | Extra groups |
+|---|---|
+| dairy | lactose_free_labels, vegan_markers, vegetarian_markers, bio_labels, organic_variants, animal_welfare |
+| dairy_alternative | lactose_free_labels, vegan_markers, vegetarian_markers |
+| meat | meat, pork, animal_welfare, bio_labels, organic_variants |
+| poultry | meat, pork, animal_welfare |
+| fish | fish_synonyms, shellfish_synonyms, histamine_triggers, sulphite_markers |
+| seafood | fish_synonyms, shellfish_synonyms, histamine_triggers, sulphite_markers |
+| snacks | nut_synonyms, superfood_markers, palm_oil, caffeine, artificial_sweeteners |
+| chocolate | vegan_markers, palm_oil, fairtrade_labels, superfood_markers |
+| bakery | vegan_markers, vegetarian_markers, gluten_free_labels, coeliac_triggers, egg_synonyms, alcohol |
+| beverages | caffeine, sugar_synonyms, artificial_sweeteners, alcohol, vegan_markers |
+| pantry | vegan_markers, vegetarian_markers, gluten_free_labels, coeliac_triggers, bio_labels, fairtrade_labels |
+| frozen | vegan_markers, vegetarian_markers, gluten_free_labels |
+| fresh_produce | vegan_markers, bio_labels, organic_variants, regional_labels, fairtrade_labels, sustainability_labels |
+| plant_protein | vegan_markers, high_protein_markers, protein_vegan, soy_synonyms |
+| sports nutrition | sports_nutrition_markers, high_protein_markers, protein_animal, protein_vegan, keto_markers |
+| baby | child_friendly_markers, allergens, lactose_free_labels, vitamin_markers, mineral_markers |
 
 ---
 
-# Step 13 — Ontology matcher design
-
-## What was done
-
-An ontology matcher was implemented.
+# Step 13 — Ontology matcher
 
 ## File
 
@@ -534,11 +522,9 @@ An ontology matcher was implemented.
 backend/services/ontology_matcher.py
 ```
 
-## Why
+## How it works
 
-After ingredients are parsed and ontology groups are routed, the system must compare ingredient tokens with ontology terms.
-
-The matcher builds an in-memory search index from ontology data and returns matched terms per ontology group.
+Builds an in-memory index from ontology CSVs. For each routed group, checks parsed ingredient tokens against the index. Returns matched terms per group.
 
 ## Output example
 
@@ -551,45 +537,7 @@ The matcher builds an in-memory search index from ontology data and returns matc
 
 ---
 
-# Step 14 — Ontology matcher testing
-
-## What was done
-
-Matcher tests were added.
-
-## File
-
-```text
-tests/test_ontology_matcher.py
-```
-
-## Test coverage
-
-* single group match
-* multi-group match
-* no match case
-* unknown group
-* fish example
-
-## Command
-
-```bash
-python -m pytest tests/test_ontology_matcher.py -q
-```
-
-## Result
-
-```text
-5 passed
-```
-
----
-
-# Step 15 — Decision engine design
-
-## What was done
-
-A decision engine was implemented.
+# Step 14 — Decision engine (v2)
 
 ## File
 
@@ -597,86 +545,43 @@ A decision engine was implemented.
 backend/services/decision_engine.py
 ```
 
-## Why
+## Verdict categories
 
-Parser, router, and matcher only produce evidence. The decision engine turns that evidence into final product verdicts.
+**Core:**
+`halal`, `vegan`, `vegan_likely`, `vegetarian`, `allergen_warning`, `regional`
 
-## Version 1 verdicts
+**Dietary:**
+`is_gluten_free`, `is_lactose_free`, `is_keto`, `is_low_sugar`, `is_low_fat`, `is_high_protein`, `is_high_fiber`, `is_diabetic_friendly`
 
-* halal
-* vegan
-* vegetarian
-* allergen_warning
-* regional
+**Labels:**
+`is_bio`, `is_fairtrade`, `is_sustainable`, `is_kids_friendly`, `is_sports`, `is_animal_welfare`
 
-## Example rule logic
+**Warnings:**
+`has_caffeine`, `has_palm_oil`, `has_histamine_risk`, `has_sulphites`
 
-* pork or alcohol found → halal = false
-* animal products found → vegan = false
-* pork found → vegetarian = false
-* allergen found → allergen_warning = true
-* regional labels found → regional = true
+**Nutrition:**
+`has_vitamins`, `has_minerals`, `has_antioxidants`, `has_superfoods`, `has_probiotics`
 
----
+**Packages:**
+Grouped multilingual user-facing labels with id, label (4 languages), icon, confidence (high/medium)
 
-# Step 16 — Decision engine testing
+## Key rules
 
-## What was done
+* `pork` or `alcohol` hit → `halal = False`
+* `animal_products` hit → `vegan = False`, `vegan_likely = False`
+* `vegan_likely = True` only when no animal hits AND no vegan marker
+* `vegan = True` only when vegan marker present AND no animal hits
+* `gluten_free_labels` hit + `coeliac_triggers` hit → `is_gluten_free = False` (trigger overrides label)
+* `vegan` package shown → `vegan_likely` package suppressed
+* `vegan_likely` always shown with `confidence: medium`
 
-Decision engine tests were added.
+## 30 package labels in 4 languages
 
-## File
-
-```text
-tests/test_decision_engine.py
-```
-
-## Test coverage
-
-* positive case except vegan
-* pork breaks halal + vegetarian
-* alcohol breaks halal
-* clean product case
-
-## Command
-
-```bash
-python -m pytest tests/test_decision_engine.py -q
-```
-
-## Result
-
-```text
-4 passed
-```
+halal, vegan, vegan_likely, vegetarian, gluten_free, lactose_free, keto, low_sugar, low_fat, diabetic_friendly, high_protein, high_fiber, vitamins, minerals, antioxidants, superfoods, probiotics, bio, fairtrade, sustainable, animal_welfare, regional, sports, kids, allergen_warning, caffeine, palm_oil, histamine_risk, sulphites
 
 ---
 
-# Step 17 — Runtime pipeline completed
-
-## What was done
-
-The first full runtime intelligence pipeline was completed:
-
-```text
-raw ingredients
-→ parser
-→ router
-→ matcher
-→ decision engine
-```
-
-## Why this matters
-
-At this point, the project moved from “data storage” to “real product intelligence”.
-
----
-
-# Step 18 — API database connector
-
-## What was done
-
-A FastAPI database connector was created for Supabase.
+# Step 15 — API database connector
 
 ## File
 
@@ -684,24 +589,16 @@ A FastAPI database connector was created for Supabase.
 backend/api/db.py
 ```
 
-## Why
+## Environment variables required
 
-The API must connect to Supabase to fetch live product data.
-
-## Important design
-
-Environment variables are used:
-
-* `SUPABASE_URL`
-* `SUPABASE_KEY`
+```text
+SUPABASE_URL
+SUPABASE_KEY
+```
 
 ---
 
-# Step 19 — FastAPI application wiring
-
-## What was done
-
-The FastAPI app was created and wired to the runtime pipeline.
+# Step 16 — FastAPI application (v2)
 
 ## File
 
@@ -709,177 +606,272 @@ The FastAPI app was created and wired to the runtime pipeline.
 backend/api/main.py
 ```
 
-## Why
+## Architecture
 
-This exposes the analysis system over HTTP so it can be used by frontend, scanner, chat, or mobile app.
-
-## Main pieces added
-
-* startup lifespan loading
-* parser/router/matcher/decision engine loaded once
-* root route
-* health route
-* analyze endpoint
+* Lifespan loads ontology + all services once at startup
+* Rate limiting via `slowapi` (60 req/min public)
+* Sentry error tracking
+* Admin routes protected by `X-Admin-Key` header (constant-time comparison)
+* Route modules imported and registered via `include_router`
 
 ---
 
-# Step 20 — Root endpoint
+# Step 17 — API endpoints
 
-## Route
+## Core endpoints
+
+### `GET /`
+Health ping. Returns `{"message": "WiseMarket API v2 is running"}`
+
+### `GET /health`
+Returns service status, version, public stores list.
+
+### `GET /analyze/{gtin}`
+Full ontology pipeline analysis. Returns verdicts, packages, price, ingredients.
+
+### `GET /admin/stats` (requires X-Admin-Key header)
+Store config + service status.
+
+### `GET /admin/health` (requires X-Admin-Key header)
+Detailed health including Sentry and key status.
+
+## Products routes — `GET /products/...`
+
+### `GET /products/search`
+
+Query params:
+* `q` — name search
+* `store` — filter by store
+* `category` — filter by category
+* `halal`, `vegan`, `vegetarian`, `gluten_free`, `lactose_free`, `low_sugar`, `high_protein`, `organic` — dietary boolean filters
+* `lang` — en/de/fr/it
+* `limit`, `offset` — pagination
+
+### `GET /products/{gtin}`
+Full product detail across all public stores.
+
+### `GET /products/{gtin}/nutrition`
+Detailed nutrition facts: per_100g, per_serving, Nutri-Score, NOVA group, vitamins, minerals.
+
+## Prices routes — `GET /prices/...`
+
+### `GET /prices/compare/{gtin}`
+Cross-store price comparison from `store_price_snapshot`. Returns:
+* prices_chf per store
+* prices_per_100g per store
+* cheapest_store + price
+* price_spread_chf + price_spread_pct
+* stores_compared
+
+### `GET /prices/history/{gtin}`
+Price history grouped by store. Optional `store` filter, `days` param (7–365).
+
+### `GET /prices/latest/{gtin}`
+Latest price per store, deduplicated.
+
+## Promotions routes
+
+### `GET /promotions`
+Active promotions sorted by discount_pct desc. Optional `store`, `category`, `lang` filters.
+
+## Basket routes — `POST /basket/...`
+
+### `POST /basket/calculate`
+Body: `{"items": [{"gtin": "...", "quantity": N}], "lang": "en"}`
+
+Returns:
+* `store_totals_chf` — total per store
+* `cheapest_complete_store` — cheapest store that has all items
+* `store_missing_items` — items not available per store
+* `item_breakdown` — per-item price across stores
+
+### `POST /basket/export`
+Body: `{"items": [...], "lang": "en|de|fr|it", "list_name": "...", "qr_url": "..."}`
+
+Returns: PDF file download (`application/pdf`)
+
+See Step 19 for full PDF export documentation.
+
+## Scan route
+
+### `POST /scan`
+Body: `{"barcode": "...", "store": "...", "user_id": "...", "lang": "en"}`
+
+1. Normalises barcode via `barcode_aliases` table
+2. Looks up product in `products`
+3. Fetches latest prices per store
+4. Logs to `user_scans` if `user_id` provided
+5. Returns product details + prices
+
+---
+
+# Step 18 — API tests
+
+## Files
 
 ```text
-GET /
+tests/test_api.py
+tests/test_decision_engine.py
+tests/test_decision_engine_advanced.py
+tests/test_ingredient_parser.py
+tests/test_ontology_matcher.py
+tests/test_ontology_router.py
 ```
 
-## Purpose
-
-Confirms the API is running.
-
-## Example response
-
-```json
-{"message":"Swiss Basket AI API is running"}
-```
-
----
-
-# Step 21 — Health endpoint
-
-## Route
+## Total tests passing
 
 ```text
-GET /health
+108 passed, 0 failed
 ```
 
-## Purpose
+## Test coverage summary
 
-Confirms:
+| File | Focus | Tests |
+|---|---|---|
+| test_api.py | All API endpoints, auth, error codes | 40 |
+| test_decision_engine.py | Core verdict logic | 11 |
+| test_decision_engine_advanced.py | Real-world edge cases | 45 |
+| test_ingredient_parser.py | Normalisation, E-numbers, nesting | 5 |
+| test_ontology_matcher.py | Multi-language matching | 5 |
+| test_ontology_router.py | Category routing, deduplication | 12 |
 
-* API is alive
-* services loaded correctly
-* ontology and runtime components exist in app state
+## Run command
 
-## Example response
-
-```json
-{
-  "status": "ok",
-  "version": "1.0.0",
-  "services": {
-    "ontology_data": true,
-    "parser": true,
-    "router": true,
-    "matcher": true,
-    "decision_engine": true
-  }
-}
+```bash
+export PYTHONPATH=/workspaces/Swiss-Basket-AI
+python -m pytest tests/ -v -W ignore::DeprecationWarning
 ```
+
+## Advanced test scenarios covered
+
+* Alcohol in baked goods (rum cake, tiramisu, wine gums) → not halal
+* Pork gelatin in sweets (Haribo-style) → not halal, not vegetarian
+* Beef gelatin (no pork) → halal passes
+* Honey, beeswax, carmine, casein, whey → not vegan
+* GF label + coeliac trigger present → not GF
+* `vegan_likely` suppressed when `vegan = True`
+* `vegan_likely` shown with `confidence: medium`
+* Multilingual package labels (EN/DE/FR/IT)
+* Sulphites in wine, histamine in aged cheese
+* Complex products: fondue (alcohol + dairy + regional), salmon (histamine + sulphites), baby formula (vitamins + minerals + kids)
 
 ---
 
-# Step 22 — Analyze endpoint
-
-## Route
-
-```text
-GET /analyze/{gtin}
-```
-
-## What it does
-
-1. validates GTIN
-2. fetches product from Supabase
-3. reads ingredients
-4. parses ingredients
-5. routes ontology groups
-6. matches ontology terms
-7. evaluates verdicts
-8. returns structured JSON
-
-## Example successful output
-
-```json
-{
-  "gtin": "1234567890123",
-  "store": "Migros",
-  "name_en": "Milk 1L",
-  "category": "Dairy",
-  "ingredients_raw": "milk",
-  "ingredients_parsed": ["milk"],
-  "ontology_groups": [
-    "allergens",
-    "animal_products",
-    "promotion_terms",
-    "price_unit_aliases",
-    "sugar_synonyms",
-    "salt_synonyms",
-    "lactose_free_labels",
-    "vegan_markers",
-    "vegetarian_markers"
-  ],
-  "matches": {
-    "allergens": ["milk"],
-    "animal_products": ["milk"],
-    "promotion_terms": [],
-    "price_unit_aliases": [],
-    "sugar_synonyms": [],
-    "salt_synonyms": [],
-    "lactose_free_labels": [],
-    "vegan_markers": [],
-    "vegetarian_markers": []
-  },
-  "verdicts": {
-    "halal": true,
-    "vegan": false,
-    "vegetarian": true,
-    "allergen_warning": true,
-    "regional": false,
-    "reasons": {
-      "pork_hits": [],
-      "alcohol_hits": [],
-      "animal_hits": ["milk"],
-      "allergen_hits": ["milk"],
-      "regional_hits": []
-    }
-  }
-}
-```
-
----
-
-# Step 23 — API successfully running
+# Step 19 — Shopping list PDF export
 
 ## What was done
 
-The FastAPI server was started successfully with:
+A multilingual PDF shopping list export was implemented.
 
-```bash
-python -m uvicorn backend.api.main:app --reload
+## Files
+
+```text
+backend/services/export_service.py
+backend/api/routes/basket.py  (POST /basket/export added)
 ```
 
-## What was verified
+## Dependencies added
 
-* startup loaded ontology and services
-* `/` route worked
-* `/health` worked
-* `/analyze/{gtin}` worked
-* end-to-end product analysis returned valid JSON
+```text
+reportlab==4.2.5
+qrcode[pil]==8.0
+pillow==11.1.0
+```
+
+## Features
+
+* 4 languages: EN / DE / FR / IT
+* Items grouped by aisle/category (fresh produce first, frozen last)
+* Dietary badges per item (Halal, Vegan, GF, Bio, etc.)
+* Store colour coding (Migros orange, Coop red, Aldi blue, Lidl blue)
+* Price per item + line totals
+* Basket totals per store
+* Cheapest store highlighted with ★
+* QR code (top right) linking to digital list
+* WiseMarket branding + date footer
+* A4 format, clean Swiss design
+
+## Category aisle order in PDF
+
+fresh_produce → dairy → dairy_alternative → meat → fish → bakery → pantry → frozen → beverages → snacks → plant_protein → other
+
+## Test command
+
+```bash
+curl -s -X POST "http://localhost:8000/basket/export" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "items": [
+      {"gtin": "7610000100001", "quantity": 2},
+      {"gtin": "7610000500001", "quantity": 1},
+      {"gtin": "7610001100001", "quantity": 3}
+    ],
+    "lang": "de",
+    "qr_url": "https://wisemarket.ch"
+  }' \
+  --output shopping_list_de.pdf
+```
+
+## Verified output
+
+All 4 language PDFs generated successfully:
+
+| File | Size |
+|---|---|
+| shopping_list_en.pdf | 4,384 bytes |
+| shopping_list_de.pdf | 4,434 bytes |
+| shopping_list_fr.pdf | 4,447 bytes |
+| shopping_list_it.pdf | 4,443 bytes |
 
 ---
 
-# Step 24 — Current runtime test summary
+# Step 20 — Dockerfile and deployment prep
 
-## Passing test files
-
-* `tests/test_ingredient_parser.py`
-* `tests/test_ontology_router.py`
-* `tests/test_ontology_matcher.py`
-* `tests/test_decision_engine.py`
-
-## Total passing tests
+## Files
 
 ```text
-18 passed
+Dockerfile
+.dockerignore
+requirements.txt
+```
+
+## Dockerfile
+
+```dockerfile
+FROM python:3.12-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+EXPOSE 8000
+CMD ["uvicorn", "backend.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+## Run locally
+
+```bash
+source .venv/bin/activate
+export PYTHONPATH=/workspaces/Swiss-Basket-AI
+uvicorn backend.api.main:app --reload --port 8000
+```
+
+## API docs (auto-generated)
+
+```
+http://localhost:8000/docs      ← Swagger UI
+http://localhost:8000/redoc     ← ReDoc
+```
+
+---
+
+# Current git history
+
+```
+d561490  feat: shopping list PDF export in EN/DE/FR/IT
+5513656  feat: API v2 complete - routes, tests, ontology router expanded
+7a5520d  feat: API v2 - products, prices, promotions, basket, scan routes + Dockerfile
+134a5f7  expand decision engine v2 - 30 verdicts, multilingual packages, expanded router
+b514559  expand all 66 ontology CSVs with full Swiss multilingual data
 ```
 
 ---
@@ -887,73 +879,126 @@ python -m uvicorn backend.api.main:app --reload
 # Current completed architecture
 
 ## Data layer
-
-* ontology CSV system
-* ontology generator
-* ontology validation
-* ontology loader
-* Supabase schema
-* ETL ingestion
+* 66 ontology CSV files
+* Schema 1: 32 tables, 53 indexes, 7 views, 10 triggers, 9 functions
+* Schema 2: 30 tables, 36 indexes, 12 views
+* Seed data: 51 products, 5 stores, prices, nutrition, user data
 
 ## Runtime intelligence layer
-
-* ingredient parser
-* ontology router
-* ontology matcher
-* decision engine
+* Ingredient parser
+* Ontology router (15 categories)
+* Ontology matcher
+* Decision engine (30+ verdicts, multilingual packages)
 
 ## API layer
+* 10 endpoints across 5 route modules
+* PDF export (4 languages)
+* Rate limiting, Sentry, admin auth
+* 108 tests passing
 
-* Supabase connector
-* FastAPI app
-* root endpoint
-* health endpoint
-* analyze endpoint
+## Infrastructure
+* Supabase (PostgreSQL) — live
+* GitHub Codespace — dev environment
+* Dockerfile ready for Railway/Render deploy
 
 ---
 
 # Current technical state
 
-The project is now at:
-
-```text
-Ontology + Supabase + Runtime Intelligence + Live API
+```
+Ontology + Supabase + Runtime Intelligence + Live API + PDF Export
 ```
 
-This means the system can already:
-
-* fetch real products
+The system can:
+* fetch real Swiss supermarket products
 * parse ingredients
-* route ontology groups
-* match ontology terms
-* evaluate food verdicts
+* route ontology groups by category
+* match ontology terms in 4 languages
+* evaluate 30+ food verdicts
+* compare prices across 5 stores
+* calculate basket totals
+* export shopping lists as PDF in EN/DE/FR/IT
 * return structured API responses
 
 ---
 
-# What is left — next high-level steps
+# What is next — remaining steps
 
-1. Add product endpoint with latest price
-2. Add price data into `/analyze/{gtin}` output
-3. Add API tests
-4. Add natural-language `/ask` endpoint
-5. Add user memory / feedback tables
-6. Add authentication and security layer
-7. Expand verdict coverage:
+1. **Agent endpoint** — `POST /agent/query`
+   Connect chat/voice/search to Claude API. Natural language → DB query → LLM refiner → smart answer.
 
-   * keto
-   * gluten-free
-   * lactose-free
-   * low sugar
-   * histamine
-8. Improve deployment and production config
-9. Improve ontology update workflow
-10. Add recommendation / ML layer later
+2. **Scraper pipeline**
+   Python scraper agents for Migros, Coop, Aldi writing into `etl.staging_products` → validation → promote to `products`.
+
+3. **Frontend**
+   React app connecting to all API endpoints. Screens: scan, search, browse, basket, profile.
+
+4. **User authentication**
+   Supabase Auth integration. Link `user_id` to actual user accounts.
+
+5. **Analytics worker**
+   Nightly job reading from `events.*` and writing aggregates to `analytics.*`.
+
+6. **Ontology improvement workflow**
+   Pipeline: `user_feedback` → `verdict_dispute_analytics` → `ontology_improvement_queue` → human review → ontology update.
+
+7. **B2B reports layer**
+   Anonymised dietary trend and price intelligence reports for retailers and food brands.
+
+8. **Railway deployment**
+   Push to GitHub → Railway auto-deploy. Add `railway.toml` config.
 
 ---
 
-# Suggested file for this document
+# File locations reference
 
-```text
-docs/technical_steps.md
+```
+Swiss-Basket-AI/
+├── backend/
+│   ├── api/
+│   │   ├── main.py                    ← FastAPI app
+│   │   ├── db.py                      ← Supabase client
+│   │   └── routes/
+│   │       ├── products.py            ← search + detail + nutrition
+│   │       ├── prices.py              ← compare + history + latest
+│   │       ├── promotions.py          ← active promotions
+│   │       ├── basket.py              ← calculate + export PDF
+│   │       └── scan.py                ← barcode scan
+│   ├── config/
+│   │   └── stores.py                  ← store registry
+│   ├── models/
+│   │   └── __init__.py
+│   ├── services/
+│   │   ├── decision_engine.py         ← 30+ verdicts + packages
+│   │   ├── ingredient_parser.py       ← raw text → token list
+│   │   ├── ontology_matcher.py        ← token → ontology hit
+│   │   ├── ontology_router.py         ← category → groups
+│   │   └── export_service.py          ← PDF shopping list
+│   ├── etl/
+│   │   ├── split_by_store.py
+│   │   └── supabase_ingest.py
+│   └── normalizer/
+│       └── ontology_loader.py
+├── data/
+│   ├── ontology/                      ← 66 CSV files
+│   ├── prices_by_store/               ← price CSVs
+│   └── products_by_store/             ← product CSVs
+├── database/
+│   ├── schema_1_v2_1_migration_safe.sql
+│   ├── schema_1_v2_1_reset.sql
+│   ├── schema_02_analytics_events.sql
+│   ├── seed_data.sql
+│   └── patch_001_image_fields.sql
+├── tests/
+│   ├── test_api.py
+│   ├── test_decision_engine.py
+│   ├── test_decision_engine_advanced.py
+│   ├── test_ingredient_parser.py
+│   ├── test_ontology_matcher.py
+│   └── test_ontology_router.py
+├── .env                               ← SUPABASE_URL, SUPABASE_KEY, etc.
+├── Dockerfile
+├── requirements.txt
+└── docs/
+    └── technical_steps.md             ← this file
 ```
