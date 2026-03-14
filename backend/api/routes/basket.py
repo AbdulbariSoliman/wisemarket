@@ -2,6 +2,7 @@
 # WISEMARKET — BASKET ROUTES
 # POST /basket/calculate
 # ============================================================
+from datetime import date
 from typing import Dict, List, Literal, Optional
 
 from fastapi import APIRouter, HTTPException
@@ -133,3 +134,140 @@ def calculate_basket(req: BasketRequest):
         "store_missing_items":     {s: v for s, v in store_missing.items() if v},
         "item_breakdown":    item_breakdown,
     }
+
+
+# ============================================================
+# SHOPPING LIST PDF EXPORT
+# POST /basket/export
+# ============================================================
+from fastapi import Response as FastAPIResponse
+from backend.services.export_service import generate_shopping_list_pdf
+
+
+class ExportRequest(BaseModel):
+    items: List[BasketItem]
+    store_filter: Optional[str] = None
+    list_name: Optional[str] = None
+    lang: Literal["en", "de", "fr", "it"] = "en"
+    qr_url: Optional[str] = None
+
+
+@router.post("/export")
+def export_shopping_list(req: ExportRequest):
+    """
+    Export a shopping list as a multilingual PDF.
+    Groups items by category (aisle order).
+    Shows dietary badges, prices, totals.
+    Highlights cheapest store.
+    """
+    if not req.items:
+        raise HTTPException(status_code=422, detail="Basket is empty")
+
+    supabase = get_supabase_client()
+    gtins = [item.gtin for item in req.items]
+    qty_map = {item.gtin: item.quantity for item in req.items}
+    lang = req.lang
+
+    # Fetch products
+    prod_resp = (
+        supabase.table("products")
+        .select(
+            "id, gtin, store, name_en, name_de, name_fr, name_it, "
+            "brand, category, ontology_tags, pack_size_raw"
+        )
+        .in_("gtin", gtins)
+        .in_("store", PUBLIC_STORES)
+        .execute()
+    )
+
+    # Fetch latest prices
+    price_resp = (
+        supabase.table("product_prices")
+        .select("product_id, gtin, store, price_chf, price_per_100g, is_promotion")
+        .in_("gtin", gtins)
+        .in_("store", PUBLIC_STORES)
+        .order("price_date", desc=True)
+        .execute()
+    )
+
+    # Build price map: {(gtin, store): price_chf}
+    price_map: Dict = {}
+    seen_prices = set()
+    for row in price_resp.data:
+        key = (row["gtin"], row["store"])
+        if key not in seen_prices:
+            seen_prices.add(key)
+            price_map[key] = row["price_chf"]
+
+    # Build product map: {(gtin, store): product_row}
+    prod_map: Dict = {}
+    for row in prod_resp.data:
+        key = (row["gtin"], row["store"])
+        prod_map[key] = row
+
+    # Determine preferred store per item
+    def best_store_for(gtin: str) -> tuple:
+        """Returns (store, price) — cheapest available or first found"""
+        candidates = [
+            (s, p) for (g, s), p in price_map.items()
+            if g == gtin and (not req.store_filter or s == req.store_filter.lower())
+        ]
+        if not candidates:
+            return (req.store_filter or PUBLIC_STORES[0], None)
+        return min(candidates, key=lambda x: x[1])
+
+    # Assemble export items
+    export_items = []
+    store_totals: Dict[str, float] = {}
+
+    for item in req.items:
+        gtin = item.gtin
+        qty = item.quantity
+        store, price = best_store_for(gtin)
+
+        prod = prod_map.get((gtin, store)) or {}
+        name_key = f"name_{lang}" if lang in ("en", "de", "fr", "it") else "name_en"
+
+        export_items.append({
+            "gtin":          gtin,
+            "name_en":       prod.get("name_en"),
+            "name_de":       prod.get("name_de"),
+            "name_fr":       prod.get("name_fr"),
+            "name_it":       prod.get("name_it"),
+            "brand":         prod.get("brand"),
+            "category":      prod.get("category") or "other",
+            "pack_size_raw": prod.get("pack_size_raw"),
+            "store":         store,
+            "quantity":      qty,
+            "price_chf":     price,
+            "ontology_tags": prod.get("ontology_tags") or {},
+        })
+
+        if price is not None:
+            store_totals[store] = round(
+                store_totals.get(store, 0) + price * qty, 2
+            )
+
+    # Find cheapest complete store
+    cheapest = min(store_totals, key=store_totals.get) if store_totals else None
+
+    # Generate PDF
+    pdf_bytes = generate_shopping_list_pdf(
+        items=export_items,
+        lang=lang,
+        store_filter=req.store_filter,
+        list_name=req.list_name,
+        cheapest_store=cheapest,
+        basket_totals=store_totals if len(store_totals) > 1 else None,
+        qr_url=req.qr_url,
+    )
+
+    filename = f"wisemarket_list_{lang}_{date.today().isoformat()}.pdf"
+
+    return FastAPIResponse(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        },
+    )
