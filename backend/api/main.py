@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Literal, Optional, Union
 
 import sentry_sdk
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from pydantic import BaseModel
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -41,7 +41,7 @@ limiter = Limiter(key_func=get_remote_address)
 
 
 # ── Auth ─────────────────────────────────────────────────────
-def verify_admin_key(x_admin_key: Optional[str] = None):
+def verify_admin_key(x_admin_key: Optional[str] = Header(None)):
     correct_key = os.environ.get("ADMIN_API_KEY", "")
     if not x_admin_key or not secrets.compare_digest(x_admin_key, correct_key):
         raise HTTPException(status_code=403, detail="Unauthorized")
