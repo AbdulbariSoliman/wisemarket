@@ -1,3 +1,6 @@
+# ============================================================
+# WISEMARKET — MAIN API
+# ============================================================
 import logging
 import os
 import secrets
@@ -6,7 +9,8 @@ from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Literal, Optional, Union
 
 import sentry_sdk
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from dotenv import load_dotenv
+from fastapi import Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -20,47 +24,47 @@ from backend.services.ingredient_parser import IngredientParser
 from backend.services.ontology_matcher import OntologyMatcher
 from backend.services.ontology_router import OntologyRouter
 
-# --- Sentry ---
-sentry_sdk.init(
-    dsn=os.environ.get("SENTRY_DSN"),
-    traces_sample_rate=0.2,
-    send_default_pii=False,
-)
+load_dotenv()
 
+# ── Logging ──────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# --- Rate Limiter ---
+# ── Sentry ───────────────────────────────────────────────────
+sentry_dsn = os.environ.get("SENTRY_DSN")
+if sentry_dsn:
+    sentry_sdk.init(dsn=sentry_dsn, traces_sample_rate=0.1)
+    logger.info("Sentry enabled")
+
+# ── Rate limiter ─────────────────────────────────────────────
 limiter = Limiter(key_func=get_remote_address)
 
 
-# --- Admin Auth ---
-def verify_admin_key(x_admin_key: str = Header(...)):
-    """
-    Protects admin routes with a secret key.
-    Uses constant-time comparison to prevent timing attacks.
-    Zero DB calls — pure in-memory check.
-    """
+# ── Auth ─────────────────────────────────────────────────────
+def verify_admin_key(x_admin_key: Optional[str] = None):
     correct_key = os.environ.get("ADMIN_API_KEY", "")
     if not x_admin_key or not secrets.compare_digest(x_admin_key, correct_key):
         raise HTTPException(status_code=403, detail="Unauthorized")
 
 
-# --- Response Models ---
+# ── Response models ──────────────────────────────────────────
 class PriceInfo(BaseModel):
-    amount: Optional[float]
-    currency: Optional[str]
-    unit_price: Optional[float]
-    price_date: Optional[str]
-    promotion_info: Optional[Dict]
+    amount: Optional[float] = None
+    currency: Optional[str] = None
+    price_per_100g: Optional[float] = None
+    price_per_pack_unit: Optional[float] = None
+    is_promotion: Optional[bool] = None
+    discount_pct: Optional[float] = None
+    promotion_label: Optional[str] = None
+    price_date: Optional[str] = None
 
 
 class ProductAnalysis(BaseModel):
     gtin: str
-    store: Optional[str]
-    name: Optional[str]
-    category: str
-    price: Optional[PriceInfo]
+    store: Optional[str] = None
+    name: Optional[str] = None
+    category: Optional[str] = None
+    price: Optional[PriceInfo] = None
     ingredients_raw: str
     ingredients_parsed: List[str]
     ontology_groups: List[str]
@@ -69,16 +73,16 @@ class ProductAnalysis(BaseModel):
 
 
 class ProductWarning(BaseModel):
-    gtin: Optional[str]
-    store: Optional[str]
-    name: Optional[str]
-    category: str
+    gtin: Optional[str] = None
+    store: Optional[str] = None
+    name: Optional[str] = None
+    category: Optional[str] = None
     ingredients_raw: str
     ingredients_parsed: List[str]
     warning: str
 
 
-# --- Helpers ---
+# ── Helpers ──────────────────────────────────────────────────
 def _validate_gtin(gtin: str) -> None:
     if not gtin.isdigit() or len(gtin) not in (8, 13, 14):
         raise HTTPException(
@@ -91,13 +95,10 @@ def _normalize_db_ingredients(value: Any, lang: str = "en") -> List[str]:
     if isinstance(value, list):
         return [str(x).strip().lower() for x in value if str(x).strip()]
     if isinstance(value, dict):
-        lang_value = value.get(lang)
-        if isinstance(lang_value, list):
-            return [str(x).strip().lower() for x in lang_value if str(x).strip()]
-        for fallback in ("en", "de", "fr", "it"):
-            fallback_value = value.get(fallback)
-            if isinstance(fallback_value, list):
-                return [str(x).strip().lower() for x in fallback_value if str(x).strip()]
+        for key in (lang, "en", "de", "fr", "it"):
+            v = value.get(key)
+            if isinstance(v, list):
+                return [str(x).strip().lower() for x in v if str(x).strip()]
     return []
 
 
@@ -111,7 +112,7 @@ def _get_product_name(product: Dict, lang: str) -> Optional[str]:
     )
 
 
-# --- Lifespan ---
+# ── Lifespan ─────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Loading ontology and services...")
@@ -127,17 +128,13 @@ async def lifespan(app: FastAPI):
         logger.exception("Startup failed")
         raise RuntimeError(f"Startup failed: {e}") from e
     yield
-    logger.info("App shutdown - cleaning up state...")
-    for attr in ("ontology_data", "parser", "router", "matcher", "decision_engine"):
-        if hasattr(app.state, attr):
-            delattr(app.state, attr)
     logger.info("Shutdown complete.")
 
 
-# --- App ---
+# ── App ───────────────────────────────────────────────────────
 app = FastAPI(
     title="WiseMarket",
-    version="1.0.0",
+    version="2.0.0",
     description="Switzerland's smartest shopping assistant.",
     lifespan=lifespan,
 )
@@ -145,26 +142,32 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+# ── Import and register route modules ────────────────────────
+from backend.api.routes import products, prices, promotions, basket, scan  # noqa: E402
+app.include_router(products.router,   prefix="/products",   tags=["products"])
+app.include_router(prices.router,     prefix="/prices",     tags=["prices"])
+app.include_router(promotions.router, prefix="/promotions", tags=["promotions"])
+app.include_router(basket.router,     prefix="/basket",     tags=["basket"])
+app.include_router(scan.router,       prefix="/scan",       tags=["scan"])
 
-# ================================
-# PUBLIC ROUTES — no auth needed
-# ================================
 
+# ── Public routes ─────────────────────────────────────────────
 @app.get("/")
 def root():
-    return {"message": "WiseMarket API is running"}
+    return {"message": "WiseMarket API v2 is running"}
 
 
 @app.get("/health")
 def health():
     return {
         "status": "ok",
-        "version": "1.0.0",
+        "version": "2.0.0",
+        "public_stores": PUBLIC_STORES,
         "services": {
-            "ontology_data": hasattr(app.state, "ontology_data"),
-            "parser": hasattr(app.state, "parser"),
-            "router": hasattr(app.state, "router"),
-            "matcher": hasattr(app.state, "matcher"),
+            "ontology":        hasattr(app.state, "ontology_data"),
+            "parser":          hasattr(app.state, "parser"),
+            "router":          hasattr(app.state, "router"),
+            "matcher":         hasattr(app.state, "matcher"),
             "decision_engine": hasattr(app.state, "decision_engine"),
         },
     }
@@ -176,41 +179,39 @@ def analyze_product(
     request: Request,
     gtin: str,
     lang: Literal["en", "de", "fr", "it"] = "en",
+    store: Optional[str] = None,
 ):
     start = time.perf_counter()
     _validate_gtin(gtin)
 
     try:
         supabase = get_supabase_client()
-        resp = (
-            supabase.table("products_new")
-            .select("*")
-            .eq("gtin", gtin)
-            .limit(1)
-            .execute()
-        )
+        query = supabase.table("products").select("*").eq("gtin", gtin)
+        if store:
+            query = query.eq("store", store.lower())
+        resp = query.limit(1).execute()
     except Exception as e:
         logger.exception("Database error for GTIN %s", gtin)
         raise HTTPException(status_code=503, detail="Database unavailable") from e
 
     if not resp.data:
-        raise HTTPException(status_code=404, detail=f"Product with GTIN {gtin} not found")
+        raise HTTPException(status_code=404, detail=f"Product {gtin} not found")
 
     product = resp.data[0]
 
-    store = product.get("store", "").lower()
-    if store not in PUBLIC_STORES:
-        raise HTTPException(status_code=403, detail="This product is not available yet")
+    if product.get("store", "").lower() not in PUBLIC_STORES:
+        raise HTTPException(status_code=403, detail="Product store not yet public")
 
     raw_ingredients = product.get("ingredients_raw") or ""
-    category = product.get("category") or ""
-    name = _get_product_name(product, lang)
+    category        = product.get("category") or ""
+    name            = _get_product_name(product, lang)
 
+    # ── Fetch latest price ────────────────────────────────────
     price_info = None
     try:
         price_resp = (
             supabase.table("product_prices")
-            .select("*")
+            .select("price_chf, currency, price_per_100g, price_per_pack_unit, is_promotion, discount_pct, promotion_label, price_date")
             .eq("product_id", product.get("id"))
             .order("price_date", desc=True)
             .limit(1)
@@ -219,53 +220,48 @@ def analyze_product(
         if price_resp.data:
             p = price_resp.data[0]
             price_info = PriceInfo(
-                amount=p.get("price"),
+                amount=p.get("price_chf"),
                 currency=p.get("currency"),
-                unit_price=p.get("unit_price"),
-                price_date=p.get("price_date"),
-                promotion_info=p.get("promotion_info"),
+                price_per_100g=p.get("price_per_100g"),
+                price_per_pack_unit=p.get("price_per_pack_unit"),
+                is_promotion=p.get("is_promotion"),
+                discount_pct=p.get("discount_pct"),
+                promotion_label=p.get("promotion_label"),
+                price_date=str(p.get("price_date")) if p.get("price_date") else None,
             )
     except Exception as e:
         logger.warning("Price fetch failed for GTIN %s: %s", gtin, e)
 
+    # ── Parse ingredients ─────────────────────────────────────
     parsed_ingredients = _normalize_db_ingredients(
         product.get("ingredients_normalized"), lang=lang
     )
-
-    if not parsed_ingredients:
-        if not raw_ingredients.strip():
-            return ProductWarning(
-                gtin=product.get("gtin"),
-                store=product.get("store"),
-                name=name,
-                category=category,
-                ingredients_raw="",
-                ingredients_parsed=[],
-                warning="No ingredients available for this product",
-            )
+    if not parsed_ingredients and raw_ingredients.strip():
         try:
             parsed_ingredients = app.state.parser.normalize(raw_ingredients)
         except Exception as e:
             logger.exception("Parsing failed for GTIN %s", gtin)
             raise HTTPException(status_code=500, detail="Ingredient parsing failed") from e
 
-    try:
-        groups = app.state.router.route(category)
-    except Exception as e:
-        logger.exception("Routing failed for category %s", category)
-        raise HTTPException(status_code=500, detail="Ontology routing failed") from e
+    if not parsed_ingredients and not raw_ingredients.strip():
+        return ProductWarning(
+            gtin=product.get("gtin"),
+            store=product.get("store"),
+            name=name,
+            category=category,
+            ingredients_raw="",
+            ingredients_parsed=[],
+            warning="No ingredients available for this product",
+        )
 
+    # ── Ontology pipeline ─────────────────────────────────────
     try:
+        groups  = app.state.router.route(category)
         matches = app.state.matcher.match(parsed_ingredients, groups)
-    except Exception as e:
-        logger.exception("Matching failed for GTIN %s", gtin)
-        raise HTTPException(status_code=500, detail="Ontology matching failed") from e
-
-    try:
         verdicts = app.state.decision_engine.evaluate(matches, lang=lang)
     except Exception as e:
-        logger.exception("Decision engine failed for GTIN %s", gtin)
-        raise HTTPException(status_code=500, detail="Decision evaluation failed") from e
+        logger.exception("Ontology pipeline failed for GTIN %s", gtin)
+        raise HTTPException(status_code=500, detail="Analysis failed") from e
 
     elapsed = time.perf_counter() - start
     logger.info("Analyzed GTIN %s in %.3fs", gtin, elapsed)
@@ -284,25 +280,18 @@ def analyze_product(
     )
 
 
-# ================================
-# ADMIN ROUTES — API key required
-# ================================
-
+# ── Admin routes ──────────────────────────────────────────────
 @app.get("/admin/stats", dependencies=[Depends(verify_admin_key)])
 def admin_stats():
-    """
-    Returns store stats and system status.
-    Requires X-Admin-Key header.
-    """
     return {
         "status": "ok",
         "stores": STORES,
         "public_stores": PUBLIC_STORES,
         "services": {
-            "ontology_data": hasattr(app.state, "ontology_data"),
-            "parser": hasattr(app.state, "parser"),
-            "router": hasattr(app.state, "router"),
-            "matcher": hasattr(app.state, "matcher"),
+            "ontology":        hasattr(app.state, "ontology_data"),
+            "parser":          hasattr(app.state, "parser"),
+            "router":          hasattr(app.state, "router"),
+            "matcher":         hasattr(app.state, "matcher"),
             "decision_engine": hasattr(app.state, "decision_engine"),
         },
     }
@@ -310,15 +299,11 @@ def admin_stats():
 
 @app.get("/admin/health", dependencies=[Depends(verify_admin_key)])
 def admin_health():
-    """
-    Detailed health check for admin.
-    Requires X-Admin-Key header.
-    """
     return {
         "status": "ok",
-        "version": "1.0.0",
+        "version": "2.0.0",
         "public_stores": PUBLIC_STORES,
-        "ontology_loaded": hasattr(app.state, "ontology_data"),
-        "sentry_enabled": bool(os.environ.get("SENTRY_DSN")),
-        "admin_key_set": bool(os.environ.get("ADMIN_API_KEY")),
+        "ontology_loaded":  hasattr(app.state, "ontology_data"),
+        "sentry_enabled":   bool(os.environ.get("SENTRY_DSN")),
+        "admin_key_set":    bool(os.environ.get("ADMIN_API_KEY")),
     }
