@@ -143,12 +143,13 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # ── Import and register route modules ────────────────────────
-from backend.api.routes import products, prices, promotions, basket, scan  # noqa: E402
+from backend.api.routes import products, prices, promotions, basket, scan, agent  # noqa: E402
 app.include_router(products.router,   prefix="/products",   tags=["products"])
 app.include_router(prices.router,     prefix="/prices",     tags=["prices"])
 app.include_router(promotions.router, prefix="/promotions", tags=["promotions"])
 app.include_router(basket.router,     prefix="/basket",     tags=["basket"])
 app.include_router(scan.router,       prefix="/scan",       tags=["scan"])
+app.include_router(agent.router,      prefix="/agent",      tags=["agent"])
 
 
 # ── Public routes ─────────────────────────────────────────────
