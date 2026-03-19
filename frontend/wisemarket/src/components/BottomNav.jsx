@@ -1,12 +1,12 @@
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Home, Search, ScanLine, ShoppingCart, MessageCircle } from 'lucide-react'
+import { Home, Search, ScanLine, ShoppingCart, Settings } from 'lucide-react'
 
 const tabs = [
-  { path: '/',       icon: Home,          label: 'Home'   },
-  { path: '/search', icon: Search,        label: 'Search' },
-  { path: '/scan',   icon: ScanLine,      label: 'Scan'   },
-  { path: '/chat',   icon: MessageCircle, label: 'Chat'   },
-  { path: '/basket', icon: ShoppingCart,  label: 'Basket' },
+  { path: '/',        icon: Home,         label: 'Home'     },
+  { path: '/search',  icon: Search,       label: 'Search'   },
+  { path: '/scan',    icon: ScanLine,     label: 'Scan'     },
+  { path: '/basket',  icon: ShoppingCart, label: 'Basket'   },
+  { path: '/settings',icon: Settings,     label: 'Settings' },
 ]
 
 export default function BottomNav() {
