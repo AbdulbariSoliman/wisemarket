@@ -37,6 +37,12 @@ STORES = {
         "base_url": "https://www.denner.ch",
         "scrape_type": "httpx_bs4",
     },
+    "open_food_facts": {
+        "public": True,
+        "crawl_delay": 0,
+        "base_url": "https://world.openfoodfacts.org",
+        "scrape_type": "api",
+    },
 }
 
 PUBLIC_STORES = [k for k, v in STORES.items() if v.get("public")]
