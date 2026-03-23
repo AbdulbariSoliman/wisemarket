@@ -1,3 +1,73 @@
+
+
+**It's a hybrid — not purely any one thing.**
+
+---
+
+### It has RAG elements
+```
+User asks: "show me halal chicken"
+  ↓
+Retrieve: query Supabase for matching products
+  ↓
+Augment: pass retrieved product data to LLM
+  ↓
+Generate: LLM writes answer using only retrieved facts
+```
+This is the classic RAG pattern — but instead of a vector store, we use a structured PostgreSQL database. Some call this **"Structured RAG"** or **"SQL-backed RAG"**.
+
+---
+
+### It has AI Agent elements
+```
+Intent detection    ← LLM decides what to do
+Tool routing        ← deterministic DB queries
+Memory              ← user_preferences + chat_history
+Personalisation     ← adapts response per user profile
+Fallback logic      ← suggests alternatives when no match
+```
+This is an **agentic** pattern — the LLM doesn't just answer, it decides which tool to use.
+
+---
+
+### It has traditional app elements
+```
+Price comparison    ← pure SQL, no LLM
+Barcode scanning    ← pure camera API
+PDF export          ← pure ReportLab
+Ontology matching   ← pure Python rules
+Decision engine     ← deterministic logic
+```
+Most of the heavy lifting is **not** AI — it's deterministic, explainable, and fast.
+
+---
+
+## How I would describe it
+
+> **WiseMarket is a Swiss retail intelligence platform — a structured-RAG, multi-agent app that combines deterministic dietary and price logic with LLM-powered natural language understanding.**
+
+Or more simply for non-technical people:
+
+> **A smart shopping assistant that knows what's in your food, where it's cheapest, and what you can eat — and you can talk to it in any Swiss language.**
+
+---
+
+## Why this architecture matters
+
+| Pure LLM app | WiseMarket |
+|---|---|
+| Hallucinates prices | Prices from real DB |
+| Can't filter by GTIN | Exact GTIN lookup |
+| No dietary rules | 30+ deterministic verdicts |
+| No memory | User preferences + history |
+| Slow and expensive | LLM only at edges |
+
+The LLM is used **surgically** — only where language understanding is needed. Everything else is fast, deterministic, and trustworthy. That's what makes it production-grade.
+
+
+
+
+
 # 🇨🇭 Swiss Basket AI — Technical README
 
 **Swiss Basket AI** is a high-integrity Retail Intelligence Platform for Switzerland.
