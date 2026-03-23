@@ -1002,3 +1002,451 @@ Swiss-Basket-AI/
 └── docs/
     └── technical_steps.md             ← this file
 ```
+# Technical Steps — Continuation from Step 20
+
+---
+
+# Step 21 — LLM Client (Provider-Agnostic)
+
+## What was done
+
+A provider-agnostic LLM wrapper was built using LiteLLM. Swap LLM provider by changing one env var — no code changes needed.
+
+## File
+
+```text
+backend/services/llm_client.py
+```
+
+## Dependencies added
+
+```text
+litellm
+```
+
+## Environment variables
+
+```env
+GROQ_API_KEY=gsk_...
+LLM_INTENT_MODEL=groq/llama-3.1-8b-instant
+LLM_REFINER_MODEL=groq/llama-3.3-70b-versatile
+LLM_FALLBACK_MODEL=groq/llama-3.1-8b-instant
+```
+
+## Why Groq
+
+Groq is the fastest inference available. `llama-3.1-8b-instant` handles intent detection in ~230ms. `llama-3.3-70b-versatile` handles response refinement in ~390ms.
+
+## Key functions
+
+```python
+call_intent(messages, max_tokens=200)   # fast model, low temp (0.1)
+call_refiner(messages, max_tokens=150)  # larger model, higher temp (0.4)
+build_messages(system, user)            # standard format
+build_messages_with_history(system, history, user)  # with conversation context (last 6 turns)
+```
+
+## Provider swap
+
+To switch from Groq to OpenAI, change `.env`:
+```env
+LLM_INTENT_MODEL=gpt-4o-mini
+LLM_REFINER_MODEL=gpt-4o
+OPENAI_API_KEY=sk_...
+```
+No code changes needed.
+
+## Verified working models (Groq, March 2026)
+
+```
+✅ groq/llama-3.1-8b-instant
+✅ groq/llama-3.3-70b-versatile
+❌ groq/llama3-8b-8192       (decommissioned)
+❌ groq/llama3-70b-8192      (decommissioned)
+❌ groq/gemma2-9b-it         (decommissioned)
+❌ groq/mixtral-8x7b-32768   (decommissioned)
+```
+
+---
+
+# Step 22 — Agent Service
+
+## What was done
+
+A full agent pipeline was built connecting user input → intent detection → DB queries → LLM refinement → personalised response.
+
+## File
+
+```text
+backend/services/agent.py
+```
+
+## Pipeline
+
+```
+Input (text/voice/barcode)
+  ↓
+_extract_search_term()     ← LLM extracts key product noun
+  ↓
+_detect_intent()           ← LLM classifies into 9 intents
+  ↓
+_load_user_profile()       ← reads user_preferences from DB
+_load_chat_history()       ← reads last 6 turns from DB
+  ↓
+Route to DB agent          ← deterministic data fetch
+  ↓
+_compose_and_refine()      ← LLM writes final answer
+  ↓
+Save to user_chat_history  ← memory for next turn
+  ↓
+Return response + products
+```
+
+## 9 intents
+
+```
+find_product      → "show me oat milk"
+check_dietary     → "is this halal?"
+price_check       → "where is milk cheapest?"
+compare_stores    → "migros vs coop for pasta"
+basket_advice     → "what's cheapest for my list?"
+scan_lookup       → barcode / GTIN lookup
+nutrition_query   → "how much protein in chicken?"
+promotion_search  → "what is on sale today?"
+general           → anything else
+```
+
+## Personalisation
+
+```python
+generate_greeting(user_id, lang, user_name)
+```
+
+- Guest: generic welcome in correct language
+- Known user: greets by name, references dietary profile and budget
+
+Example for Ahmed (halal, budget CHF 15, prefers Migros/Coop):
+> "Hello Ahmed, I'm happy to assist you with your shopping needs, ensuring that all products meet your halal dietary preferences. How can I help you find the perfect items within your budget of CHF 15.0 at Migros or Coop today?"
+
+## Similar products fallback
+
+When exact search returns 0 results:
+1. Search without dietary filter → find non-compliant products
+2. Search for dietary-compliant alternatives in same category
+3. Return both with honest explanation
+
+---
+
+# Step 23 — Agent API Route
+
+## File
+
+```text
+backend/api/routes/agent.py
+```
+
+## Endpoints
+
+### `POST /agent/query`
+
+```json
+{
+  "input": "show me halal chicken",
+  "lang": "en",
+  "user_id": "optional-uuid",
+  "mode": "chat",
+  "store": null
+}
+```
+
+Returns:
+```json
+{
+  "response": "Here are halal chicken options...",
+  "intent": "find_product",
+  "products": [...]
+}
+```
+
+### `GET /agent/greeting`
+
+```
+GET /agent/greeting?lang=en&user_id=xxx&user_name=Ahmed
+```
+
+Returns personalised greeting based on user profile.
+
+## Tested responses
+
+| Input | Intent | Result |
+|---|---|---|
+| "where is milk cheapest?" | price_check | CHF 1.29 Aldi, 1.45 Migros, 1.50 Coop |
+| "show me halal chicken" | find_product | 2 halal chicken products |
+| "was ist heute im Angebot?" | promotion_search | 4 promotions in German |
+| Guest greeting | — | Generic EN/DE/FR/IT welcome |
+| Ahmed greeting | — | Personal halal-aware greeting |
+
+---
+
+# Step 24 — React PWA Frontend
+
+## What was done
+
+A full React Progressive Web App was built with Vite + Tailwind.
+
+## Location
+
+```text
+frontend/wisemarket/
+```
+
+## Stack
+
+```
+Vite 8          ← build tool
+React 18        ← UI framework
+React Router    ← navigation
+Tailwind CSS    ← styling
+Lucide React    ← icons
+@zxing/library  ← barcode scanning
+```
+
+## Design
+
+- Dark mode primary (easier in bright store lighting)
+- Swiss red `#E63946` accent
+- Fonts: Syne (headers) + DM Sans (body)
+- Mobile-first, PWA-ready
+
+## Pages
+
+| Route | Page | Purpose |
+|---|---|---|
+| `/` | Home | Greeting + quick actions + today's deals |
+| `/search` | Search | Product search + AI chat in one tab |
+| `/scan` | Scan | Camera barcode scanner + manual GTIN |
+| `/basket` | Basket | Shopping list + price comparison + PDF export |
+| `/product/:gtin` | Product | Full product detail, prices, nutrition |
+| `/settings` | Settings | Language, dietary preferences, dark/light mode |
+| `/chat` | Chat | Dedicated AI chat page |
+
+## Key features
+
+- **Combined search** — toggle between product search and AI chat in same input
+- **GTIN auto-detect** — typing 8-14 digits redirects to product page
+- **Voice input** — Web Speech API, language-aware (de-CH, fr-CH, it-CH)
+- **Barcode scanner** — camera via @zxing, animated scan line
+- **Basket persistence** — localStorage, survives page refresh
+- **Dark/light mode** — toggle in Settings, stored in localStorage
+- **Language** — EN/DE/FR/IT, stored in localStorage, affects all API calls
+- **Dietary preferences** — toggle switches in Settings, auto-filter search
+- **Product badges** — 30+ ontology tags displayed with colour coding
+- **Retailer links** — direct link to product on Migros/Coop/Aldi/Lidl
+- **Nutrition tabs** — per 100g + per serving + Nutri-Score circle
+- **Price bars** — neutral store comparison bars (no "cheapest" label)
+- **Add to basket** — button on product page, confirms with green flash
+- **PDF export** — from basket page, triggers download
+
+## PWA config
+
+```text
+frontend/wisemarket/public/manifest.json
+```
+
+```json
+{
+  "name": "WiseMarket",
+  "theme_color": "#E63946",
+  "display": "standalone",
+  "background_color": "#0D0D0F"
+}
+```
+
+## Build
+
+```bash
+cd frontend/wisemarket
+npm run build
+# Output: dist/ (694KB JS, 10KB CSS)
+```
+
+## Dev
+
+```bash
+# Terminal 1 — Backend
+uvicorn backend.api.main:app --port 8000
+
+# Terminal 2 — Frontend
+cd frontend/wisemarket
+npm run dev -- --host 0.0.0.0 --port 5173
+```
+
+Vite proxies `/api/*` to `http://localhost:8000`.
+
+---
+
+# Step 25 — Open Food Facts Ingestion
+
+## What was done
+
+Real Swiss product data was ingested from the Open Food Facts public API into Supabase.
+
+## File
+
+```text
+backend/etl/ingest_open_food_facts.py
+```
+
+## Source
+
+```
+https://world.openfoodfacts.org — Swiss country filter
+```
+
+## Results
+
+| Metric | Value |
+|---|---|
+| Products ingested | 9,886 |
+| Products skipped (no name/GTIN) | 114 |
+| Pages fetched | 100 × 100 = 10,000 |
+| Time to ingest | ~18 minutes |
+
+## Tag counts after ingestion
+
+| Tag | Products |
+|---|---|
+| halal | 9,546 |
+| vegan | 7,862 |
+| gluten_free | 8,258 |
+| lactose_free | 8,116 |
+| vegetarian | 9,714 |
+
+## What gets ingested per product
+
+- GTIN (EAN-13)
+- Name in EN / DE / FR / IT
+- Brand
+- Category (mapped from OFF categories)
+- Ingredients (raw text)
+- Allergens (contains + may_contain)
+- Ontology tags (JSONB)
+- Nutri-Score (A–E)
+- NOVA group (1–4)
+- Full nutrition per 100g
+- Image URL (stored as reference only — never downloaded)
+
+## Ontology tag logic
+
+```python
+# Halal: no pork, no alcohol in name/ingredients/category
+has_pork    = any keyword in [porc, schwein, pork, lard, bacon, jambon...]
+has_alcohol = any keyword in [alcool, bière, vin, whisky, vodka, rum, gin, wine...]
+tags["halal"] = not has_pork and not has_alcohol
+
+# Vegan: no dairy/egg/fish allergens
+tags["vegan"] = "milk" not in contains and "eggs" not in contains and "fish" not in contains
+
+# Non-food filter: shampoo, cosmetics, soap → excluded entirely
+is_nonfood = any keyword in [shampoo, shampoing, cosmetic, lotion, savon, soap...]
+if is_nonfood: return None  # skip product
+```
+
+## Category mapping
+
+15 categories mapped from multilingual OFF category strings:
+dairy, dairy_alternative, meat, fish, bakery, beverages, pantry, snacks, frozen, fresh_produce, plant_protein, other
+
+## Run command
+
+```bash
+cd /workspaces/Swiss-Basket-AI
+export PYTHONPATH=/workspaces/Swiss-Basket-AI
+python backend/etl/ingest_open_food_facts.py
+```
+
+## Store name in DB
+
+All OFF products use `store = "open_food_facts"` in the products table.
+
+## Re-ingestion
+
+Re-running the script upserts on `gtin, store` conflict — safe to re-run.
+
+## Important: JSONB fix
+
+After initial ingestion, ontology_tags were stored as JSON strings. A fix script was run to convert all to proper JSONB:
+
+```bash
+python /tmp/fix_jsonb.py
+```
+
+This enables Supabase JSONB filtering:
+```python
+.eq("ontology_tags->>halal", "true")
+```
+
+---
+
+# Step 26 — Store config updated
+
+## What was done
+
+`open_food_facts` was added to `PUBLIC_STORES` so the API includes OFF products in all searches.
+
+## File
+
+```text
+backend/config/stores.py
+```
+
+## Current stores
+
+| Store | Public | Type |
+|---|---|---|
+| migros | ✅ | playwright scraper (pending) |
+| coop | ✅ | playwright scraper (pending) |
+| aldi | ✅ | httpx_bs4 scraper (pending) |
+| lidl | ✅ | httpx_bs4 scraper (pending) |
+| denner | ❌ | pending |
+| open_food_facts | ✅ | API ingestion ✅ |
+
+---
+
+# Current DB state (March 2026)
+
+```
+products table:
+  open_food_facts store  → 9,886 real Swiss products
+  migros/coop/aldi/lidl  → 51 seed products (test data)
+  TOTAL                  → ~9,937 products
+
+nutrition_facts          → populated for OFF products with nutrition data
+product_prices           → seed data only (scraper needed for live prices)
+store_price_snapshot     → seed data only
+```
+
+---
+
+# Current git log
+
+```
+[latest]  feat: 9886 real Swiss products from Open Food Facts
+84daac0   feat: agent endpoint with Groq LLM
+d561490   feat: shopping list PDF export in EN/DE/FR/IT
+5513656   feat: API v2 complete - routes, tests, ontology router expanded
+7a5520d   feat: API v2 - products, prices, promotions, basket, scan routes
+134a5f7   expand decision engine v2 - 30 verdicts, multilingual packages
+b514559   expand all 66 ontology CSVs with full Swiss multilingual data
+```
+
+---
+
+# What remains — updated next steps
+
+1. **Price scraper** — Migros/Coop/Aldi/Lidl live prices (biggest gap)
+2. **Auth** — Supabase Auth, link user_id to real accounts
+3. **Deploy** — Railway or Render, production environment
+4. **Analytics worker** — nightly events → aggregates job
+5. **More OFF data** — currently 10K of 102K Swiss products ingested
+6. **Ontology improvement** — feedback loop from users to ontology CSVs
