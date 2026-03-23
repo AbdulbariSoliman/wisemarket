@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Search as SearchIcon, X, Send, Mic } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
+import { useBasket } from '../hooks/useBasket'
 import ProductCard from '../components/ProductCard'
 
 const FILTERS = ['halal','vegan','gluten_free','lactose_free','organic','high_protein','low_sugar','vegetarian','dairy_free']
@@ -27,6 +28,12 @@ export default function Search() {
   const inputRef  = useRef()
   const bottomRef = useRef()
   const lang = localStorage.getItem('lang') || 'en'
+  const { addProduct } = useBasket()
+
+  const handleAddToBasket = (product) => {
+    addProduct(product)
+    navigate('/basket')
+  }
 
   // Auto-detect GTIN
   const isGtin = GTIN_RE.test(query.trim())
@@ -214,7 +221,7 @@ export default function Search() {
               ))
             : results.map((p, i) => (
                 <div key={`${p.gtin}-${p.store}`} style={{ animationDelay: `${i*0.04}s` }}>
-                  <ProductCard product={p} />
+                  <ProductCard product={p} onAdd={handleAddToBasket} />
                 </div>
               ))
           }
@@ -281,7 +288,7 @@ export default function Search() {
           {messages[messages.length - 1]?.products?.length > 0 && (
             <div className="animate-in">
               {messages[messages.length - 1].products.slice(0, 3).map((p, i) => (
-                <ProductCard key={i} product={p} />
+                <ProductCard key={i} product={p} onAdd={handleAddToBasket} />
               ))}
             </div>
           )}

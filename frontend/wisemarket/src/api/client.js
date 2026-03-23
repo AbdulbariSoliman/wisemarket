@@ -59,6 +59,10 @@ export const api = {
   calculate: (body) => request('/basket/calculate', {
     method: 'POST', body: JSON.stringify(body)
   }),
+  basketNutrition: (body) => request('/basket/nutrition', {
+    method: 'POST', body: JSON.stringify(body)
+  }),
+
   exportPDF: async (body) => {
     const res = await fetch(`${BASE}/basket/export`, {
       method: 'POST',

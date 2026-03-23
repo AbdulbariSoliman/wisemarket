@@ -271,3 +271,77 @@ def export_shopping_list(req: ExportRequest):
             "Content-Disposition": f'attachment; filename="{filename}"'
         },
     )
+
+
+@router.post("/nutrition")
+def basket_nutrition(req: BasketRequest):
+    """
+    Calculate total nutrition for a basket of items.
+    Returns sum of kcal, protein, fat, sugar, salt across all items.
+    """
+    if not req.items:
+        raise HTTPException(status_code=422, detail="Basket is empty")
+
+    supabase = get_supabase_client()
+    gtins = [item.gtin for item in req.items]
+    qty_map = {item.gtin: item.quantity for item in req.items}
+
+    # Get product IDs
+    prod_resp = (
+        supabase.table("products")
+        .select("id, gtin, name_en")
+        .in_("gtin", gtins)
+        .in_("store", PUBLIC_STORES)
+        .limit(len(gtins) * 5)
+        .execute()
+    )
+
+    # Deduplicate — one product per GTIN
+    seen = set()
+    prod_ids = {}
+    for p in prod_resp.data:
+        if p["gtin"] not in seen:
+            seen.add(p["gtin"])
+            prod_ids[p["gtin"]] = p["id"]
+
+    if not prod_ids:
+        return {"total": {}, "per_item": []}
+
+    # Get nutrition facts
+    nutr_resp = (
+        supabase.table("nutrition_facts")
+        .select("product_id, energy_kcal_100, protein_100, fat_100, sugars_100, salt_100, carbs_100, fibre_100")
+        .in_("product_id", list(prod_ids.values()))
+        .execute()
+    )
+
+    nutr_map = {r["product_id"]: r for r in nutr_resp.data}
+
+    total = {"kcal": 0.0, "protein": 0.0, "fat": 0.0, "sugar": 0.0, "salt": 0.0, "carbs": 0.0}
+    per_item = []
+
+    for gtin, pid in prod_ids.items():
+        qty = qty_map.get(gtin, 1)
+        n = nutr_map.get(pid)
+        if not n:
+            per_item.append({"gtin": gtin, "has_nutrition": False})
+            continue
+
+        # Assume 100g serving for calculation
+        item_nutr = {
+            "kcal":    (n.get("energy_kcal_100") or 0) * qty,
+            "protein": (n.get("protein_100") or 0) * qty,
+            "fat":     (n.get("fat_100") or 0) * qty,
+            "sugar":   (n.get("sugars_100") or 0) * qty,
+            "salt":    (n.get("salt_100") or 0) * qty,
+            "carbs":   (n.get("carbs_100") or 0) * qty,
+        }
+        for k in total:
+            total[k] += item_nutr.get(k, 0)
+
+        per_item.append({"gtin": gtin, "has_nutrition": True, **item_nutr})
+
+    # Round totals
+    total = {k: round(v, 1) for k, v in total.items()}
+
+    return {"total": total, "per_item": per_item}

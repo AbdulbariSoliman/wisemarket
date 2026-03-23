@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, ShoppingCart, ExternalLink, Heart } from 'lucide-react'
+import { useBasket } from '../hooks/useBasket'
 import { api } from '../api/client'
 import PriceBar from '../components/PriceBar'
 
@@ -83,21 +84,13 @@ export default function Product() {
   const [loading, setLoading]   = useState(true)
   const [tab, setTab]           = useState('info')
   const [saved, setSaved]       = useState(false)
+  const { addProduct } = useBasket()
   const lang = localStorage.getItem('lang') || 'en'
 
-  // Basket state from localStorage
   const addToBasket = () => {
-    const basket = JSON.parse(localStorage.getItem('basket') || '[]')
-    const exists = basket.find(i => i.gtin === gtin)
-    if (exists) {
-      const updated = basket.map(i => i.gtin === gtin ? {...i, quantity: i.quantity + 1} : i)
-      localStorage.setItem('basket', JSON.stringify(updated))
-    } else {
-      basket.push({ gtin, quantity: 1, name: product?.name || gtin })
-      localStorage.setItem('basket', JSON.stringify(basket))
-    }
+    addProduct({ gtin, name_en: product?.name_en, name: product?.name_en })
     setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
+    setTimeout(() => { setSaved(false); navigate('/basket') }, 1000)
   }
 
   useEffect(() => {
