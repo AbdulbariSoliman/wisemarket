@@ -320,32 +320,43 @@ export default function Home() {
         </div>
       )}
 
-      {/* Dinner suggestion — evening */}
-      {!query && new Date().getHours() >= 16 && (
+      {/* Dinner suggestion — show always for testing, normally after 16:00 */}
+      {!query && (
         <div style={{ padding: '20px 16px 0' }}>
           <h2 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 12px' }}>
             🍽️ Tonight's dinner idea
           </h2>
-          <div className="card" style={{ cursor: 'pointer' }}
-            onClick={() => handleSuggestion(
-              ['pasta bolognese', 'risotto', 'poulet rôti', 'spaghetti carbonara',
-               'raclette', 'fondue', 'lachs mit gemüse', 'pizza'][new Date().getDay()]
-            )}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ fontSize: 32 }}>
-                {['🍕','🍝','🥗','🐟','🧀','🍲','🐔','🍳'][new Date().getDay()]}
-              </span>
-              <div>
-                <p style={{ margin: 0, fontWeight: 600, fontSize: 14 }}>
-                  {['Pizza night','Pasta bolognese','Light salad','Salmon & veg',
-                    'Raclette evening','Fondue night','Roast chicken','Weekend brunch'][new Date().getDay()]}
-                </p>
-                <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--muted)' }}>
-                  Tap to find ingredients →
-                </p>
+          {(() => {
+            const day = new Date().getDay()
+            const dinners = [
+              { icon:'🍕', name:'Pizza night',     search:'mozzarella tomaten pizza' },
+              { icon:'🍝', name:'Pasta bolognese', search:'hackfleisch pasta tomaten' },
+              { icon:'🥗', name:'Light salad',     search:'salat lachs avocado' },
+              { icon:'🐟', name:'Salmon & veg',    search:'lachs gemüse zitrone' },
+              { icon:'🧀', name:'Raclette evening',search:'raclettekäse kartoffeln cornichons' },
+              { icon:'🍲', name:'Fondue night',    search:'fonduekäse brot weisswein' },
+              { icon:'🐔', name:'Roast chicken',   search:'poulet kartoffeln kräuter' },
+            ]
+            const d = dinners[day % dinners.length]
+            return (
+              <div className="card" style={{ cursor: 'pointer' }}
+                onClick={() => {
+                  setQuery(d.search)
+                  inputRef.current?.focus()
+                }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span style={{ fontSize: 32 }}>{d.icon}</span>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ margin: 0, fontWeight: 600, fontSize: 14 }}>{d.name}</p>
+                    <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--muted)' }}>
+                      Tap to find ingredients →
+                    </p>
+                  </div>
+                  <span style={{ fontSize: 11, color: 'var(--red)', fontWeight: 600 }}>Shop →</span>
+                </div>
               </div>
-            </div>
-          </div>
+            )
+          })()}
         </div>
       )}
 
