@@ -182,6 +182,11 @@ def get_product(
             "image_url":       p.get("image_url"),
             "image_source":    p.get("image_source"),
             "is_verified":     p.get("is_verified"),
+            "name_en":         p.get("name_en") or "",
+            "name_de":         p.get("name_de") or "",
+            "name_fr":         p.get("name_fr") or "",
+            "name_it":         p.get("name_it") or "",
+            "source_url":      p.get("source_url") or "",
         })
 
     return {"gtin": gtin, "stores": results}
