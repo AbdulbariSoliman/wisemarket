@@ -31,8 +31,14 @@ export default function Home() {
   const [focused, setFocused]   = useState(false)
   const [listening, setListening] = useState(false)
 
-  const seasonal = getSeasonalContext(lang)
-  const greeting = getGreeting(lang)
+  const seasonal = (() => {
+    try { return getSeasonalContext(lang) }
+    catch(e) { return { banner: null, bannerIcon: null, suggestions: [], seasonalProduce: [], event: null } }
+  })()
+  const greeting = (() => {
+    try { return getGreeting(lang) }
+    catch(e) { return 'Welcome 👋' }
+  })()
   const isGtin   = /^\d{8,14}$/.test(query.trim())
   const dinner   = DINNERS[new Date().getDay() % DINNERS.length]
 
