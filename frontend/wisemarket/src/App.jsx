@@ -1,52 +1,51 @@
-import { useEffect } from 'react'
-import { Navigate } from 'react-router-dom'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import BottomNav from './components/BottomNav'
-import Home     from './pages/Home'
-import Basket   from './pages/Basket'
-import Profile  from './pages/Profile'
-import Product  from './pages/Product'
-import Scan     from './pages/Scan'
-import Chat     from './pages/Chat'
+import { useEffect, useState } from 'react'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import BottomNav   from './components/BottomNav'
+import Home        from './pages/Home'
+import Basket      from './pages/Basket'
+import Profile     from './pages/Profile'
+import Product     from './pages/Product'
+import Scan        from './pages/Scan'
+import Chat        from './pages/Chat'
 import StoreMap    from './pages/StoreMap'
 import Onboarding  from './pages/Onboarding'
 
 export default function App() {
-  useEffect(() => {
-    // Register service worker for offline mode
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js')
-        .then(() => console.log('SW registered'))
-        .catch(() => {})
-    }
+  const [onboarded, setOnboarded] = useState(!!localStorage.getItem('onboarded'))
 
-    // Auto-detect language on first open
+  useEffect(() => {
+    // Register service worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {})
+    }
+    // Auto-detect language
     if (!localStorage.getItem('lang')) {
-      const browserLang = navigator.language?.substring(0, 2)
-      const supported = ['en', 'de', 'fr', 'it']
-      const detected = supported.includes(browserLang) ? browserLang : 'en'
-      localStorage.setItem('lang', detected)
+      const lang = navigator.language?.substring(0, 2)
+      localStorage.setItem('lang', ['en','de','fr','it'].includes(lang) ? lang : 'en')
     }
     // Apply theme
     const theme = localStorage.getItem('theme') || 'dark'
     document.documentElement.setAttribute('data-theme', theme)
+
+    // Listen for onboarding completion
+    const check = () => setOnboarded(!!localStorage.getItem('onboarded'))
+    window.addEventListener('storage', check)
+    return () => window.removeEventListener('storage', check)
   }, [])
 
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={
-          localStorage.getItem('onboarded') ? <Home /> : <Navigate to="/onboarding" replace />
-        }/>
-        <Route path="/basket"        element={<Basket />}  />
-        <Route path="/profile"       element={<Profile />} />
+        <Route path="/onboarding" element={<Onboarding onDone={() => setOnboarded(true)} />} />
+        <Route path="/"           element={onboarded ? <Home />    : <Navigate to="/onboarding" replace />} />
+        <Route path="/basket"     element={onboarded ? <Basket />  : <Navigate to="/onboarding" replace />} />
+        <Route path="/profile"    element={onboarded ? <Profile /> : <Navigate to="/onboarding" replace />} />
         <Route path="/product/:gtin" element={<Product />} />
-        <Route path="/scan"          element={<Scan />}    />
-        <Route path="/chat"          element={<Chat />}    />
-        <Route path="/stores"        element={<StoreMap />}/>
-        <Route path="/onboarding"     element={<Onboarding />}/>
+        <Route path="/scan"       element={<Scan />} />
+        <Route path="/chat"       element={<Chat />} />
+        <Route path="/stores"     element={<StoreMap />} />
       </Routes>
-      <BottomNav />
+      {onboarded && <BottomNav />}
     </BrowserRouter>
   )
 }

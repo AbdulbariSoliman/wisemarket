@@ -107,7 +107,7 @@ const T = {
   },
 }
 
-export default function Onboarding() {
+export default function Onboarding({ onDone }) {
   const navigate  = useNavigate()
   const [step, setStep]   = useState(1)
   const [lang, setLang]   = useState(() => {
@@ -127,6 +127,7 @@ export default function Onboarding() {
     localStorage.setItem('dietary', JSON.stringify(prefs))
     if (store) localStorage.setItem('preferred_store', store)
     localStorage.setItem('onboarded', '1')
+    if (onDone) onDone()
     navigate('/')
   }
 
