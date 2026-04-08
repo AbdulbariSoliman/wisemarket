@@ -40,7 +40,11 @@ export default function Home() {
       track('search', { query })
       try {
         const dietary = JSON.parse(localStorage.getItem('dietary') || '{}')
-        const filters = Object.fromEntries(Object.entries(dietary).filter(([,v]) => v))
+        // Only pass filters that are explicitly TRUE
+        const VALID_FILTERS = ['halal','vegan','vegetarian','gluten_free','lactose_free',
+          'dairy_free','nut_free','organic','regional','high_protein','low_sugar']
+        const filters = {}
+        VALID_FILTERS.forEach(k => { if (dietary[k] === true) filters[k] = true })
         const res = await api.search({ q: query, lang, limit: 8, ...filters })
         setResults(res.results || [])
       } catch(e) {}
