@@ -93,7 +93,7 @@ export default function Home() {
   }
 
   const showSuggestions = focused && !query && seasonal.suggestions?.length > 0
-  const showResults = query.trim().length > 0 && results.length > 0
+  const showResults = results.length > 0
   const showAI = aiResponse && !loading
 
   return (
@@ -311,14 +311,41 @@ export default function Home() {
       )}
 
       {/* Search results */}
-      {showResults && (
+      {results.length > 0 && (
         <div style={{ padding: '12px 16px 0' }}>
           <p style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>
-            {results.length} results
+            {results.length} {lang === 'de' ? 'Ergebnisse' : lang === 'fr' ? 'résultats' : lang === 'it' ? 'risultati' : 'results'} for "{query}"
           </p>
-          {results.map((p, i) => (
-            <ProductCard key={`${p.gtin}-${p.store}-${i}`} product={p} onAdd={handleAdd} />
-          ))}
+          <div>
+            {results.map((p, i) => (
+              <div key={`${p.gtin}-${p.store}-${i}`}
+                style={{ marginBottom: 8, cursor: 'pointer' }}
+                onClick={() => navigate(`/product/${p.gtin}`)}>
+                <div className="card" style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                  {p.image_url && (
+                    <img src={p.image_url} alt={p.name}
+                      style={{ width: 48, height: 48, borderRadius: 8, objectFit: 'contain', flexShrink: 0 }}
+                      onError={e => e.target.style.display='none'}
+                    />
+                  )}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ margin: 0, fontWeight: 600, fontSize: 14,
+                                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {p.name || p.name_en || p.name_de}
+                    </p>
+                    <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--muted)' }}>
+                      {p.brand && `${p.brand} · `}{p.store} · {p.category}
+                    </p>
+                  </div>
+                  {p.price && (
+                    <span style={{ fontWeight: 700, fontSize: 14, flexShrink: 0 }}>
+                      CHF {Number(p.price).toFixed(2)}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
