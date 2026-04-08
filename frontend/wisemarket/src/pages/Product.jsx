@@ -109,7 +109,7 @@ export default function Product() {
   )
 
   const product = stores[selected] || stores[0]
-  const name = product[`name_${lang}`] || product.name_en || product.name_de || 'Unknown'
+  const name = product[`name_${lang}`] || product.name_en || product.name_de || product.name || 'Unknown'
   const tags = product.ontology_tags || {}
   const allergens = product.allergens || {}
   const activeBadges = Object.entries(tags).filter(([k,v]) => v === true && ALL_BADGES[k]).map(([k]) => k)
@@ -124,9 +124,16 @@ export default function Product() {
   const getProductUrl = () => {
     if (product.source_url) return product.source_url
     const store = product.store
-    if (store === 'migros' && product.gtin) {
-      return `https://www.migros.ch/de/product/${product.gtin}`
+    // Migros: use source_url from DB or search fallback
+    if (store === 'migros') {
+      return `https://www.migros.ch/de/search?query=${encodeURIComponent(name)}`
     }
+    if (store === 'coop') {
+      return `https://www.coop.ch/de/search?q=${encodeURIComponent(name)}`
+    }
+    if (store === 'aldi') return `https://www.aldi.ch/de/produkte.html?q=${encodeURIComponent(name)}`
+    if (store === 'lidl') return `https://www.lidl.ch/de/suche?query=${encodeURIComponent(name)}`
+    if (store === 'open_food_facts') return `https://world.openfoodfacts.org/product/${gtin}`
     return STORE_URLS[store] || null
   }
 

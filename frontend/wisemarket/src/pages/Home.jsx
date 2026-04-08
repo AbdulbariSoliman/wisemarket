@@ -91,7 +91,7 @@ export default function Home() {
   }
 
   const showSuggestions = focused && !query && seasonal.suggestions?.length > 0
-  const showResults = query && results.length > 0
+  const showResults = query.length > 0 && results.length > 0
   const showAI = aiResponse && !loading
 
   return (
@@ -184,7 +184,7 @@ export default function Home() {
           <input ref={inputRef} value={query}
             onChange={e => setQuery(e.target.value)}
             onFocus={() => setFocused(true)}
-            onBlur={() => setTimeout(() => setFocused(false), 150)}
+            onBlur={() => {}}
             onKeyDown={e => e.key === 'Enter' && handleSubmit()}
             placeholder={mode === 'ai'
               ? { en: 'Ask anything — prices, halal, nutrition...', de: 'Fragen Sie alles — Preise, Halal, Nährwerte...', fr: 'Demandez tout — prix, halal, nutrition...', it: 'Chiedi tutto — prezzi, halal, nutrizione...' }[lang] || 'Ask anything...'
