@@ -33,7 +33,7 @@ export default function Home() {
 
   // Search as user types
   useEffect(() => {
-    if (!query.trim() || mode === 'ai') { setResults([]); return }
+    if (!query.trim()) { setResults([]); return }
     if (isGtin) return
     const t = setTimeout(async () => {
       setLoading(true)
@@ -47,15 +47,13 @@ export default function Home() {
       finally { setLoading(false) }
     }, 300)
     return () => clearTimeout(t)
-  }, [query, mode])
+  }, [query])
 
   const handleSubmit = async () => {
     if (!query.trim()) return
     if (isGtin) { navigate(`/product/${query.trim()}`); return }
 
-    if (mode === 'ai' || query.includes('?') || query.toLowerCase().startsWith('where') ||
-        query.toLowerCase().startsWith('show') || query.toLowerCase().startsWith('find') ||
-        query.toLowerCase().startsWith('was') || query.toLowerCase().startsWith('wo')) {
+    if (isAiQuery(query)) {
       setLoading(true)
       setAiResponse(null)
       try {
