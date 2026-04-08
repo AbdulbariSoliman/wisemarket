@@ -88,14 +88,30 @@ def is_non_food(name: str, breadcrumb: list) -> bool:
 def build_ontology_tags(name: str, breadcrumb: list) -> dict:
     cat = map_category(breadcrumb)
     name_lower = name.lower()
-    has_pork = any(x in name_lower for x in ["schwein","speck","schinken","salami","wurst"])
-    has_alcohol = any(x in name_lower for x in ["bier","wein","wine","bière","alkohol"])
+
+    has_pork    = any(x in name_lower for x in ["schwein","speck","schinken","salami","wurst","lard","porc"])
+    has_alcohol = any(x in name_lower for x in ["bier","wein","wine","bière","alkohol","spirits","vodka","whisky"])
+    has_halal_cert = any(x in name_lower for x in ["halal","حلال"])
+    is_regional = any(x in name_lower for x in ["aus der region","region","regional","schweizer","suisse"])
+    is_bio      = any(x in name_lower for x in ["bio","biologisch","organic","biologique"])
+
+    # Meat/fish: halal ONLY if explicitly certified
+    # Non-meat: halal if no pork + no alcohol (dairy, pantry, snacks etc don't need cert)
+    if cat in ["meat", "fish"]:
+        halal = has_halal_cert and not has_pork and not has_alcohol
+    else:
+        halal = not has_pork and not has_alcohol
+
     return {
-        "halal":       not has_pork and not has_alcohol,
-        "vegetarian":  cat not in ["meat","fish"] and not has_pork,
-        "vegan":       cat not in ["meat","fish","dairy"] and not has_pork,
-        "gluten_free": not any(x in name_lower for x in ["brot","pasta","mehl","weizen","gerste"]),
-        "lactose_free":cat != "dairy",
+        "halal":        halal,
+        "vegetarian":   cat not in ["meat","fish"] and not has_pork,
+        "vegan":        cat not in ["meat","fish","dairy"] and not has_pork,
+        "gluten_free":  not any(x in name_lower for x in ["brot","pasta","mehl","weizen","gerste","dinkel"]),
+        "lactose_free": cat != "dairy",
+        "organic":      is_bio,
+        "regional":     is_regional,
+        "is_bio":       is_bio,
+        "is_regional":  is_regional,
     }
 
 
