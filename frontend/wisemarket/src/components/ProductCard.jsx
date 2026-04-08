@@ -62,8 +62,24 @@ export default function ProductCard({ product, price, showStore = true }) {
           )}
         </div>
 
+        {/* Carbon score */}
+        {(() => {
+          const carbon = getCarbonScore(product.name || product.name_en || product.name_de, product.category)
+          if (!carbon) return null
+          const colors = { A:'#038141', B:'#85BB2F', C:'#FECB02', D:'#EE8100', E:'#E63946' }
+          return (
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 3,
+              marginTop: 6, fontSize: 10, fontWeight: 700,
+              color: colors[carbon.score] || '#888',
+            }}>
+              🌍 CO₂ {carbon.score}
+            </span>
+          )
+        })()}
+
         {badges.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 8 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
             {badges.slice(0, 4).map(b => (
               <span key={b} className={`badge badge-${b}`}>
                 {b === 'halal' ? '☪️' : b === 'vegan' ? '🌱' : b === 'gluten_free' ? 'GF' :

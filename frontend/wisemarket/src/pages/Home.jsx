@@ -1,122 +1,368 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ScanLine, Search, Tag, TrendingDown } from 'lucide-react'
+import { Mic, ScanLine, Send, X } from 'lucide-react'
 import { api } from '../api/client'
+import { useBasket } from '../hooks/useBasket'
+import { getSeasonalContext, getGreeting, getCarbonScore } from '../data/seasonal'
 import ProductCard from '../components/ProductCard'
 
 export default function Home() {
   const navigate = useNavigate()
-  const [greeting, setGreeting] = useState('')
-  const [promotions, setPromotions] = useState([])
-  const [loading, setLoading] = useState(true)
+  const { addProduct } = useBasket()
   const lang = localStorage.getItem('lang') || 'en'
 
+  const [query, setQuery]             = useState('')
+  const [focused, setFocused]         = useState(false)
+  const [results, setResults]         = useState([])
+  const [aiResponse, setAiResponse]   = useState(null)
+  const [loading, setLoading]         = useState(false)
+  const [promotions, setPromotions]   = useState([])
+  const [listening, setListening]     = useState(false)
+  const [mode, setMode]               = useState('search') // search | ai
+  const inputRef = useRef()
+
+  const seasonal = getSeasonalContext(lang)
+  const greeting = getGreeting(lang)
+  const isGtin = /^\d{8,14}$/.test(query.trim())
+
+  // Load promotions
   useEffect(() => {
-    Promise.all([
-      api.greeting({ lang }),
-      api.promotions({ limit: 3 }),
-    ]).then(([g, p]) => {
-      setGreeting(g.greeting)
-      setPromotions(p.promotions || [])
-    }).finally(() => setLoading(false))
+    api.promotions({ limit: 3, lang }).then(d => setPromotions(d.promotions || [])).catch(() => {})
   }, [])
 
-  const quickActions = [
-    { icon: ScanLine,    label: 'Scan',       path: '/scan',   color: 'var(--red)' },
-    { icon: Search,      label: 'Search',     path: '/search', color: '#3B82F6'    },
-    { icon: Tag,         label: 'Deals',      path: '/deals',  color: '#10B981'    },
-    { icon: TrendingDown,label: 'Compare',    path: '/search', color: '#F59E0B'    },
-  ]
+  // Search as user types
+  useEffect(() => {
+    if (!query.trim() || mode === 'ai') { setResults([]); return }
+    if (isGtin) return
+    const t = setTimeout(async () => {
+      setLoading(true)
+      try {
+        const dietary = JSON.parse(localStorage.getItem('dietary') || '{}')
+        const filters = Object.fromEntries(Object.entries(dietary).filter(([,v]) => v))
+        const res = await api.search({ q: query, lang, limit: 8, ...filters })
+        setResults(res.results || [])
+      } catch(e) {}
+      finally { setLoading(false) }
+    }, 300)
+    return () => clearTimeout(t)
+  }, [query, mode])
+
+  const handleSubmit = async () => {
+    if (!query.trim()) return
+    if (isGtin) { navigate(`/product/${query.trim()}`); return }
+
+    if (mode === 'ai' || query.includes('?') || query.toLowerCase().startsWith('where') ||
+        query.toLowerCase().startsWith('show') || query.toLowerCase().startsWith('find') ||
+        query.toLowerCase().startsWith('was') || query.toLowerCase().startsWith('wo')) {
+      setLoading(true)
+      setAiResponse(null)
+      try {
+        const res = await api.query({ input: query, lang, mode: 'chat' })
+        setAiResponse(res)
+        setResults(res.products || [])
+      } catch(e) {}
+      finally { setLoading(false) }
+    }
+  }
+
+  const handleSuggestion = (s) => {
+    setQuery(s)
+    setFocused(true)
+    inputRef.current?.focus()
+  }
+
+  const handleAdd = (product) => {
+    addProduct(product)
+    navigate('/basket')
+  }
+
+  const startVoice = () => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!SR) return
+    const r = new SR()
+    r.lang = lang === 'de' ? 'de-CH' : lang === 'fr' ? 'fr-CH' : lang === 'it' ? 'it-CH' : 'en-US'
+    r.onresult = e => { setQuery(e.results[0][0].transcript); setFocused(true) }
+    r.onend = () => setListening(false)
+    r.start()
+    setListening(true)
+  }
+
+  const showSuggestions = focused && !query && seasonal.suggestions?.length > 0
+  const showResults = query && results.length > 0
+  const showAI = aiResponse && !loading
 
   return (
-    <div style={{ padding: '24px 16px 100px' }}>
-      {/* Header */}
-      <div style={{ marginBottom: 28 }} className="animate-in">
-        <p style={{ color: 'var(--muted)', fontSize: 13, marginBottom: 4 }}>
-          {new Date().toLocaleDateString(lang, { weekday: 'long', day: 'numeric', month: 'long' })}
+    <div style={{ paddingBottom: 90 }}>
+
+      {/* Header with greeting */}
+      <div style={{ padding: '20px 16px 0' }}>
+        <p style={{ fontSize: 13, color: 'var(--muted)', margin: '0 0 4px' }}>
+          {new Date().toLocaleDateString(lang === 'de' ? 'de-CH' : lang === 'fr' ? 'fr-CH' : lang === 'it' ? 'it-CH' : 'en-GB',
+            { weekday: 'long', day: 'numeric', month: 'long' })}
         </p>
-        <h1 style={{ fontFamily: 'Syne', fontSize: 28, fontWeight: 800,
-                     lineHeight: 1.2, marginBottom: 12 }}>
-          Wise<span style={{ color: 'var(--red)' }}>Market</span>
+        <h1 style={{ fontFamily: 'Syne', fontSize: 24, fontWeight: 800, margin: 0 }}>
+          {greeting}
         </h1>
-        {loading
-          ? <div className="skeleton" style={{ height: 40, width: '90%' }} />
-          : <p style={{ color: 'var(--muted)', fontSize: 14, lineHeight: 1.5 }}>{greeting}</p>
-        }
       </div>
 
-      {/* Quick actions */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
-                    gap: 10, marginBottom: 32 }}>
-        {quickActions.map(({ icon: Icon, label, path, color }) => (
-          <button key={label} onClick={() => navigate(path)} style={{
-            background: 'var(--surface)', border: '1px solid var(--border)',
-            borderRadius: 14, padding: '14px 8px', cursor: 'pointer',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
-            transition: 'border-color 0.15s, transform 0.15s',
-          }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = color; e.currentTarget.style.transform = 'translateY(-2px)' }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.transform = 'translateY(0)' }}
-          >
-            <div style={{ background: `${color}22`, borderRadius: 10, padding: 8 }}>
-              <Icon size={18} color={color} />
-            </div>
-            <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 500 }}>{label}</span>
-          </button>
-        ))}
-      </div>
+      {/* Seasonal banner */}
+      {seasonal.banner && (
+        <div style={{
+          margin: '14px 16px 0',
+          padding: '12px 16px',
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
+          borderRadius: 14,
+          cursor: 'pointer',
+          display: 'flex', alignItems: 'center', gap: 12,
+        }}
+          onClick={() => handleSuggestion(seasonal.suggestions?.[0] || '')}
+        >
+          <span style={{ fontSize: 24, flexShrink: 0 }}>{seasonal.bannerIcon}</span>
+          <div style={{ flex: 1 }}>
+            <p style={{ margin: 0, fontSize: 13, fontWeight: 600 }}>{seasonal.banner}</p>
+            {seasonal.seasonalProduce?.length > 0 && (
+              <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--muted)' }}>
+                🇨🇭 In season now: {seasonal.seasonalProduce.slice(0, 3).join(' · ')}
+              </p>
+            )}
+          </div>
+          <span style={{ fontSize: 11, color: 'var(--red)', fontWeight: 600, flexShrink: 0 }}>
+            Shop →
+          </span>
+        </div>
+      )}
 
-      {/* Promotions */}
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between',
-                      alignItems: 'center', marginBottom: 14 }}>
-          <h2 style={{ fontSize: 17, fontWeight: 700 }}>🔥 Today's Deals</h2>
-          <button onClick={() => navigate('/deals')} style={{
-            background: 'none', border: 'none', color: 'var(--red)',
-            fontSize: 13, cursor: 'pointer', fontWeight: 500,
-          }}>See all</button>
+      {/* Smart search box */}
+      <div style={{ padding: '14px 16px 0', position: 'relative' }}>
+
+        {/* Mode toggle */}
+        <div style={{ display: 'flex', gap: 4, marginBottom: 8,
+                      background: 'var(--surface)', borderRadius: 10, padding: 3, width: 'fit-content' }}>
+          {[['search','🔍 Search'], ['ai','✨ Ask AI']].map(([m, label]) => (
+            <button key={m} onClick={() => setMode(m)} style={{
+              padding: '5px 14px', border: 'none', borderRadius: 8, fontSize: 12,
+              background: mode === m ? 'var(--dark)' : 'transparent',
+              color: mode === m ? 'var(--text)' : 'var(--muted)',
+              fontWeight: mode === m ? 600 : 400, cursor: 'pointer',
+            }}>{label}</button>
+          ))}
         </div>
 
-        {loading
-          ? [1,2,3].map(i => (
-              <div key={i} className="skeleton" style={{ height: 80, marginBottom: 10, borderRadius: 16 }} />
-            ))
-          : promotions.map((promo, i) => (
+        {/* Input */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          background: 'var(--surface)', border: `1px solid ${focused ? 'var(--red)' : 'var(--border)'}`,
+          borderRadius: 14, padding: '0 12px', transition: 'border-color 0.15s',
+        }}>
+          <input ref={inputRef} value={query}
+            onChange={e => setQuery(e.target.value)}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setTimeout(() => setFocused(false), 150)}
+            onKeyDown={e => e.key === 'Enter' && handleSubmit()}
+            placeholder={mode === 'ai'
+              ? { en: 'Ask anything — prices, halal, nutrition...', de: 'Fragen Sie alles — Preise, Halal, Nährwerte...', fr: 'Demandez tout — prix, halal, nutrition...', it: 'Chiedi tutto — prezzi, halal, nutrizione...' }[lang] || 'Ask anything...'
+              : { en: 'Search products or scan barcode...', de: 'Produkte suchen oder Barcode scannen...', fr: 'Rechercher ou scanner...', it: 'Cerca o scansiona...' }[lang] || 'Search...'
+            }
+            style={{ flex: 1, background: 'none', border: 'none', outline: 'none',
+                     padding: '14px 0', fontSize: 15, color: 'var(--text)' }}
+          />
+          {query ? (
+            <button onClick={() => { setQuery(''); setResults([]); setAiResponse(null) }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', padding: 4 }}>
+              <X size={16} />
+            </button>
+          ) : null}
+          <button onClick={startVoice} style={{
+            background: listening ? 'var(--red)' : 'none', border: 'none',
+            cursor: 'pointer', borderRadius: 8, padding: 6,
+            color: listening ? 'white' : 'var(--muted)',
+          }}>
+            <Mic size={17} />
+          </button>
+          <button onClick={() => navigate('/scan')} style={{
+            background: 'var(--red)', border: 'none', cursor: 'pointer',
+            borderRadius: 8, padding: 6, display: 'flex', alignItems: 'center',
+          }}>
+            <ScanLine size={17} color="white" />
+          </button>
+          {query && (
+            <button onClick={handleSubmit} style={{
+              background: 'var(--red)', border: 'none', cursor: 'pointer',
+              borderRadius: 8, padding: 6, display: 'flex', alignItems: 'center',
+            }}>
+              <Send size={15} color="white" />
+            </button>
+          )}
+        </div>
+
+        {/* GTIN hint */}
+        {isGtin && (
+          <div onClick={() => navigate(`/product/${query.trim()}`)} style={{
+            marginTop: 8, padding: '8px 14px', background: 'rgba(230,57,70,0.08)',
+            border: '1px solid rgba(230,57,70,0.3)', borderRadius: 10,
+            fontSize: 13, color: 'var(--red)', cursor: 'pointer',
+          }}>
+            📦 GTIN detected — tap to view product →
+          </div>
+        )}
+
+        {/* Suggestions dropdown */}
+        {showSuggestions && (
+          <div style={{
+            position: 'absolute', top: 'calc(100% - 4px)', left: 16, right: 16,
+            background: 'var(--surface)', border: '1px solid var(--border)',
+            borderRadius: 14, zIndex: 50, overflow: 'hidden',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+          }}>
+            <div style={{ padding: '10px 14px 6px' }}>
+              <p style={{ margin: 0, fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>
+                {seasonal.event ? `${seasonal.bannerIcon} ${seasonal.event.name}` :
+                 seasonal.isWeekend ? '🏡 Weekend ideas' : '💡 Suggestions'}
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: 8, padding: '0 14px 12px',
+                          overflowX: 'auto', scrollbarWidth: 'none' }}>
+              {seasonal.suggestions.map(s => (
+                <button key={s} onClick={() => handleSuggestion(s)} style={{
+                  whiteSpace: 'nowrap', padding: '6px 14px', borderRadius: 20,
+                  border: '1px solid var(--border)', background: 'var(--dark)',
+                  fontSize: 13, cursor: 'pointer', color: 'var(--text)',
+                  textTransform: 'capitalize',
+                }}>
+                  {s}
+                </button>
+              ))}
+            </div>
+
+            {/* Seasonal produce */}
+            {seasonal.seasonalProduce?.length > 0 && (
+              <>
+                <div style={{ borderTop: '1px solid var(--border)', padding: '8px 14px 6px' }}>
+                  <p style={{ margin: 0, fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>
+                    🇨🇭 In season this month
+                  </p>
+                </div>
+                <div style={{ display: 'flex', gap: 8, padding: '0 14px 12px',
+                              overflowX: 'auto', scrollbarWidth: 'none' }}>
+                  {seasonal.seasonalProduce.map(s => (
+                    <button key={s} onClick={() => handleSuggestion(s)} style={{
+                      whiteSpace: 'nowrap', padding: '6px 14px', borderRadius: 20,
+                      border: '1px solid rgba(45,198,83,0.3)',
+                      background: 'rgba(45,198,83,0.08)',
+                      fontSize: 13, cursor: 'pointer', color: '#4ade80',
+                      textTransform: 'capitalize',
+                    }}>
+                      🌱 {s}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* AI response */}
+      {showAI && (
+        <div style={{ margin: '12px 16px 0' }} className="animate-in">
+          <div className="card">
+            <p style={{ fontSize: 12, color: 'var(--red)', fontWeight: 600, marginBottom: 8 }}>
+              ✨ AI · {aiResponse.intent?.replace('_', ' ')}
+            </p>
+            <p style={{ fontSize: 14, lineHeight: 1.6 }}>{aiResponse.response}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Loading */}
+      {loading && (
+        <div style={{ margin: '12px 16px 0' }}>
+          <div className="skeleton" style={{ height: 60, borderRadius: 14 }} />
+        </div>
+      )}
+
+      {/* Search results */}
+      {showResults && (
+        <div style={{ padding: '12px 16px 0' }}>
+          <p style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>
+            {results.length} results
+          </p>
+          {results.map((p, i) => (
+            <ProductCard key={`${p.gtin}-${p.store}-${i}`} product={p} onAdd={handleAdd} />
+          ))}
+        </div>
+      )}
+
+      {/* Today's deals — shown when no search active */}
+      {!query && promotions.length > 0 && (
+        <div style={{ padding: '20px 16px 0' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between',
+                        alignItems: 'center', marginBottom: 12 }}>
+            <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>🔥 Today's deals</h2>
+            <button onClick={() => navigate('/deals')} style={{
+              background: 'none', border: 'none', color: 'var(--red)',
+              fontSize: 13, cursor: 'pointer', fontWeight: 500,
+            }}>See all</button>
+          </div>
+          {promotions.map((promo, i) => {
+            const STORE_COLORS = { migros:'#E05A00', coop:'#C0001A', aldi:'#00539F', lidl:'#0050AA' }
+            const color = STORE_COLORS[promo.store] || 'var(--muted)'
+            return (
               <div key={i} className="card animate-in" style={{
-                marginBottom: 10, cursor: 'pointer',
-                animationDelay: `${i * 0.08}s`,
-              }}
-                onClick={() => navigate(`/product/${promo.gtin}`)}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <p style={{ fontWeight: 600, fontSize: 14 }}>{promo.name}</p>
-                    <p style={{ color: 'var(--muted)', fontSize: 12, marginTop: 2,
-                                textTransform: 'capitalize' }}>
-                      ● {promo.store} · {promo.promotion_label}
-                    </p>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <p style={{ fontFamily: 'Syne', fontWeight: 700, color: '#4ade80' }}>
-                      CHF {promo.promo_price_chf?.toFixed(2)}
-                    </p>
-                    <p style={{ color: 'var(--muted)', fontSize: 11,
-                                textDecoration: 'line-through' }}>
-                      CHF {promo.original_price_chf?.toFixed(2)}
-                    </p>
-                  </div>
-                  <span style={{
-                    background: '#0d3320', color: '#4ade80',
-                    borderRadius: 8, padding: '4px 8px',
-                    fontSize: 12, fontWeight: 700, marginLeft: 8,
-                  }}>
-                    -{promo.discount_pct?.toFixed(0)}%
-                  </span>
+                marginBottom: 10, cursor: 'pointer', display: 'flex',
+                alignItems: 'center', gap: 12, animationDelay: `${i*0.08}s`,
+              }} onClick={() => navigate(`/product/${promo.gtin}`)}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ margin: 0, fontSize: 14, fontWeight: 600,
+                               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {promo.name}
+                  </p>
+                  <p style={{ margin: '2px 0 0', fontSize: 12, color }}>
+                    ● {promo.store} · {promo.promotion_label}
+                  </p>
+                </div>
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <p style={{ margin: 0, fontFamily: 'Syne', fontWeight: 700, fontSize: 15 }}>
+                    CHF {promo.promo_price_chf?.toFixed(2)}
+                  </p>
+                  <p style={{ margin: 0, fontSize: 11, color: 'var(--muted)',
+                               textDecoration: 'line-through' }}>
+                    CHF {promo.original_price_chf?.toFixed(2)}
+                  </p>
+                </div>
+                <div style={{
+                  background: 'rgba(45,198,83,0.12)', color: '#4ade80',
+                  borderRadius: 8, padding: '4px 8px', fontSize: 12, fontWeight: 700,
+                  flexShrink: 0,
+                }}>
+                  -{promo.discount_pct?.toFixed(0)}%
                 </div>
               </div>
-            ))
-        }
-      </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Privacy note — shown once */}
+      {!localStorage.getItem('privacy_shown') && (
+        <div style={{ margin: '20px 16px 0', padding: '12px 16px',
+                      background: 'var(--surface)', border: '1px solid var(--border)',
+                      borderRadius: 14, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+          <span style={{ fontSize: 18, flexShrink: 0 }}>🔒</span>
+          <div style={{ flex: 1 }}>
+            <p style={{ margin: 0, fontSize: 13, fontWeight: 600 }}>Your data stays yours</p>
+            <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>
+              WiseMarket never sells your shopping data. Delete everything anytime in Profile.
+            </p>
+          </div>
+          <button onClick={() => { localStorage.setItem('privacy_shown','1'); }} style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: 'var(--muted)', fontSize: 18, padding: 0, flexShrink: 0,
+          }}>×</button>
+        </div>
+      )}
+
     </div>
   )
 }
