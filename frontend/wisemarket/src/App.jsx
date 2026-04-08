@@ -7,6 +7,7 @@ import Profile  from './pages/Profile'
 import Product  from './pages/Product'
 import Scan     from './pages/Scan'
 import Chat     from './pages/Chat'
+import StoreMap from './pages/StoreMap'
 
 export default function App() {
   useEffect(() => {
@@ -31,6 +32,7 @@ export default function App() {
         <Route path="/product/:gtin" element={<Product />} />
         <Route path="/scan"          element={<Scan />}    />
         <Route path="/chat"          element={<Chat />}    />
+        <Route path="/stores"        element={<StoreMap />}/>
       </Routes>
       <BottomNav />
     </BrowserRouter>

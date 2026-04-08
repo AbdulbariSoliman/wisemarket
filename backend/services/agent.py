@@ -99,6 +99,7 @@ def _load_chat_history(user_id: Optional[str], limit: int = 6) -> List[Dict]:
 
 def _detect_intent(user_input: str, lang: str) -> str:
     system = """You are an intent classifier for a Swiss supermarket app.
+The user may write in German, French, Italian, or English.
 Classify the user message into exactly one of these intents:
 find_product, check_dietary, price_check, compare_stores,
 basket_advice, scan_lookup, nutrition_query, promotion_search, general
@@ -138,11 +139,16 @@ def _extract_store(text: str) -> Optional[str]:
 def _extract_search_term(user_input: str, lang: str) -> str:
     """Extract the key product search term from natural language input."""
     system = """Extract only the product name from this shopping query.
-Return 1-3 words only. Examples:
+The query may be in German, French, Italian, or English.
+Return 1-3 words in the ORIGINAL language of the query.
+Examples:
 'show me halal chicken' -> chicken
 'where is milk cheapest' -> milk
 'find vegan pasta' -> pasta
 'was kostet Milch' -> Milch
+'où est le lait moins cher' -> lait
+'mostrami il pollo halal' -> pollo
+'zeig mir Eier' -> Eier
 Reply with ONLY the product name, no quotes, no punctuation."""
     messages = build_messages(system, user_input)
     try:
@@ -333,7 +339,13 @@ def _build_system_prompt(
 
     return f"""You are WiseMarket, a smart Swiss supermarket shopping assistant.
 You help users find products, check dietary compatibility, compare prices, and shop smarter.
-Switzerland has 4 languages — always respond in {lang_name}.
+
+LANGUAGE RULE — THIS IS MANDATORY:
+- The user's language is: {lang_name}
+- You MUST respond ONLY in {lang_name}
+- NEVER switch to another language
+- If user writes in a different language, still respond in {lang_name}
+- Translate product names to {lang_name} when possible
 
 {name_str}User dietary profile: {pref_str}.
 Preferred stores: {store_str}. Budget: {budget_str}.

@@ -4,6 +4,7 @@ import { Mic, ScanLine, Send, X } from 'lucide-react'
 import { api } from '../api/client'
 import { useBasket } from '../hooks/useBasket'
 import { getSeasonalContext, getGreeting, getCarbonScore } from '../data/seasonal'
+import { track, getSmartSuggestions, getFrequentProducts } from '../hooks/useTracking'
 import ProductCard from '../components/ProductCard'
 
 export default function Home() {
@@ -36,6 +37,7 @@ export default function Home() {
     if (isGtin) return
     const t = setTimeout(async () => {
       setLoading(true)
+      track('search', { query })
       try {
         const dietary = JSON.parse(localStorage.getItem('dietary') || '{}')
         const filters = Object.fromEntries(Object.entries(dietary).filter(([,v]) => v))
@@ -72,6 +74,7 @@ export default function Home() {
   }
 
   const handleAdd = (product) => {
+    track('add', { gtin: product.gtin, name: product.name || product.name_en, category: product.category, store: product.store })
     addProduct(product)
     navigate('/basket')
   }
@@ -103,6 +106,29 @@ export default function Home() {
         <h1 style={{ fontFamily: 'Syne', fontSize: 24, fontWeight: 800, margin: 0 }}>
           {greeting}
         </h1>
+      </div>
+
+      {/* Quick actions row */}
+      <div style={{ display: 'flex', gap: 8, padding: '14px 16px 0' }}>
+        {[
+          { icon: '📍', label: { en:'Nearby', de:'In der Nähe', fr:'À proximité', it:'Vicino' }, path: '/stores' },
+          { icon: '🔥', label: { en:'Deals', de:'Angebote', fr:'Offres', it:'Offerte' }, path: '/deals' },
+          { icon: '💬', label: { en:'Ask AI', de:'KI fragen', fr:'Demander', it:'Chiedi' }, path: '/chat' },
+          { icon: '📷', label: { en:'Scan', de:'Scannen', fr:'Scanner', it:'Scansiona' }, path: '/scan' },
+        ].map(({ icon, label, path }) => (
+          <button key={path} onClick={() => navigate(path)} style={{
+            flex: 1, padding: '10px 4px', background: 'var(--surface)',
+            border: '1px solid var(--border)', borderRadius: 12, cursor: 'pointer',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+            transition: 'border-color 0.15s',
+          }}
+            onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--red)'}
+            onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+          >
+            <span style={{ fontSize: 20 }}>{icon}</span>
+            <span style={{ fontSize: 10, color: 'var(--muted)' }}>{label[lang] || label.en}</span>
+          </button>
+        ))}
       </div>
 
       {/* Seasonal banner */}
@@ -291,6 +317,35 @@ export default function Home() {
           {results.map((p, i) => (
             <ProductCard key={`${p.gtin}-${p.store}-${i}`} product={p} onAdd={handleAdd} />
           ))}
+        </div>
+      )}
+
+      {/* Dinner suggestion — evening */}
+      {!query && new Date().getHours() >= 16 && (
+        <div style={{ padding: '20px 16px 0' }}>
+          <h2 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 12px' }}>
+            🍽️ Tonight's dinner idea
+          </h2>
+          <div className="card" style={{ cursor: 'pointer' }}
+            onClick={() => handleSuggestion(
+              ['pasta bolognese', 'risotto', 'poulet rôti', 'spaghetti carbonara',
+               'raclette', 'fondue', 'lachs mit gemüse', 'pizza'][new Date().getDay()]
+            )}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 32 }}>
+                {['🍕','🍝','🥗','🐟','🧀','🍲','🐔','🍳'][new Date().getDay()]}
+              </span>
+              <div>
+                <p style={{ margin: 0, fontWeight: 600, fontSize: 14 }}>
+                  {['Pizza night','Pasta bolognese','Light salad','Salmon & veg',
+                    'Raclette evening','Fondue night','Roast chicken','Weekend brunch'][new Date().getDay()]}
+                </p>
+                <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--muted)' }}>
+                  Tap to find ingredients →
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

@@ -35,6 +35,9 @@ export default function Basket() {
   const [nutrition, setNutrition] = useState(null)
   const [loading, setLoading]   = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [budget, setBudget]         = useState(() => parseFloat(localStorage.getItem('budget') || '0'))
+  const [showBudget, setShowBudget] = useState(false)
+  const [budgetInput, setBudgetInput] = useState('')
   const [search, setSearch]     = useState('')
   const [searchResults, setSearchResults] = useState([])
   const [searching, setSearching] = useState(false)
@@ -238,6 +241,81 @@ export default function Basket() {
                 cursor: 'pointer', transition: 'all 0.15s',
               }}>{label}</button>
             ))}
+          </div>
+
+          {/* Budget mode */}
+          <div style={{ marginBottom: 12 }}>
+            {!showBudget ? (
+              <button onClick={() => setShowBudget(true)} style={{
+                background: 'none', border: '1px dashed var(--border)',
+                borderRadius: 10, padding: '8px 14px', cursor: 'pointer',
+                fontSize: 13, color: 'var(--muted)', width: '100%',
+                transition: 'all 0.15s',
+              }}>
+                💰 {budget > 0 ? `Budget: CHF ${budget.toFixed(2)}` : 'Set a budget'}
+              </button>
+            ) : (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span style={{ fontSize: 13, color: 'var(--muted)', flexShrink: 0 }}>CHF</span>
+                <input
+                  value={budgetInput}
+                  onChange={e => setBudgetInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      const b = parseFloat(budgetInput)
+                      if (b > 0) { setBudget(b); localStorage.setItem('budget', b) }
+                      setShowBudget(false)
+                    }
+                  }}
+                  placeholder="Enter budget e.g. 50"
+                  style={{ borderRadius: 10, padding: '8px 12px', fontSize: 14 }}
+                  autoFocus
+                />
+                <button onClick={() => {
+                  const b = parseFloat(budgetInput)
+                  if (b > 0) { setBudget(b); localStorage.setItem('budget', b) }
+                  setShowBudget(false)
+                }} style={{
+                  background: 'var(--red)', border: 'none', color: 'white',
+                  borderRadius: 10, padding: '8px 14px', cursor: 'pointer',
+                  fontSize: 13, flexShrink: 0,
+                }}>Set</button>
+                {budget > 0 && (
+                  <button onClick={() => { setBudget(0); localStorage.removeItem('budget'); setShowBudget(false) }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 13 }}>
+                    Clear
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Budget progress bar */}
+            {budget > 0 && total > 0 && (
+              <div style={{ marginTop: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between',
+                              fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>
+                  <span>CHF {total.toFixed(2)} spent</span>
+                  <span style={{ color: total > budget ? '#f87171' : '#4ade80', fontWeight: 600 }}>
+                    {total > budget
+                      ? `CHF ${(total - budget).toFixed(2)} over budget`
+                      : `CHF ${(budget - total).toFixed(2)} remaining`}
+                  </span>
+                </div>
+                <div style={{ background: 'var(--border)', borderRadius: 6, height: 8, overflow: 'hidden' }}>
+                  <div style={{
+                    width: `${Math.min(100, (total/budget)*100)}%`,
+                    height: '100%', borderRadius: 6,
+                    background: total > budget ? '#E63946' : total/budget > 0.8 ? '#E09000' : '#4ade80',
+                    transition: 'width 0.4s ease, background 0.3s',
+                  }} />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between',
+                              fontSize: 10, color: 'var(--muted)', marginTop: 3 }}>
+                  <span>CHF 0</span>
+                  <span>CHF {budget.toFixed(0)}</span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Store selector for one-store mode */}
