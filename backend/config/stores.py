@@ -43,6 +43,30 @@ STORES = {
         "base_url": "https://world.openfoodfacts.org",
         "scrape_type": "api",
     },
+    "denner": {
+        "public": False,
+        "crawl_delay": 3,
+        "base_url": "https://www.denner.ch",
+        "scrape_type": "httpx_bs4",
+    },
+    "volg": {
+        "public": False,
+        "crawl_delay": 3,
+        "base_url": "https://www.volg.ch",
+        "scrape_type": "httpx_bs4",
+    },
+    "spar": {
+        "public": False,
+        "crawl_delay": 3,
+        "base_url": "https://www.spar.ch",
+        "scrape_type": "httpx_bs4",
+    },
+    "manor": {
+        "public": False,
+        "crawl_delay": 3,
+        "base_url": "https://www.manor.ch",
+        "scrape_type": "httpx_bs4",
+    },
 }
 
 PUBLIC_STORES = [k for k, v in STORES.items() if v.get("public")]
