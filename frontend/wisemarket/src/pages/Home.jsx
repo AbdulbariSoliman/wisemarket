@@ -108,7 +108,6 @@ export default function Home() {
       <div style={{ display: 'flex', gap: 8, padding: '14px 16px 0' }}>
         {[
           { icon:'📍', label:'Nearby',  path:'/stores' },
-          { icon:'🔥', label:'Deals',   path:'/deals'  },
           { icon:'💬', label:'Ask AI',  path:'/chat'   },
           { icon:'📷', label:'Scan',    path:'/scan'   },
         ].map(({ icon, label, path }) => (
