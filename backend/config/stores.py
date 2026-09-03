@@ -33,6 +33,7 @@ STORES = {
     },
     "denner": {
         "public": False,
+        "crawl_delay": 3,
         "reason": "Pending scraper implementation",
         "base_url": "https://www.denner.ch",
         "scrape_type": "httpx_bs4",
@@ -42,12 +43,6 @@ STORES = {
         "crawl_delay": 0,
         "base_url": "https://world.openfoodfacts.org",
         "scrape_type": "api",
-    },
-    "denner": {
-        "public": False,
-        "crawl_delay": 3,
-        "base_url": "https://www.denner.ch",
-        "scrape_type": "httpx_bs4",
     },
     "volg": {
         "public": False,

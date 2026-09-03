@@ -9,6 +9,8 @@ import Scan        from './pages/Scan'
 import Chat        from './pages/Chat'
 import StoreMap    from './pages/StoreMap'
 import Onboarding  from './pages/Onboarding'
+import Search      from './pages/Search'
+import Settings    from './pages/Settings'
 
 export default function App() {
   const [onboarded, setOnboarded] = useState(!!localStorage.getItem('onboarded'))
@@ -44,6 +46,8 @@ export default function App() {
         <Route path="/scan"       element={<Scan />} />
         <Route path="/chat"       element={<Chat />} />
         <Route path="/stores"     element={<StoreMap />} />
+        <Route path="/search"     element={onboarded ? <Search />   : <Navigate to="/onboarding" replace />} />
+        <Route path="/settings"   element={onboarded ? <Settings /> : <Navigate to="/onboarding" replace />} />
       </Routes>
       {onboarded && <BottomNav />}
     </BrowserRouter>

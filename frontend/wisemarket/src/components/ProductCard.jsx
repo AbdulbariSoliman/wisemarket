@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { ChevronRight } from 'lucide-react'
+import { getCarbonScore } from '../data/seasonal'
 
 const BADGE_KEYS = [
   'halal','vegan','vegan_likely','vegetarian','gluten_free',
