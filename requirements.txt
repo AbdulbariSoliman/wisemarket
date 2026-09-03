@@ -1,3 +1,4 @@
+# ── Core API runtime ─────────────────────────────────────────
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
 supabase==2.10.0
@@ -5,9 +6,17 @@ python-dotenv==1.0.1
 pydantic==2.10.4
 slowapi==0.1.9
 sentry-sdk[fastapi]==2.19.2
-httpx==0.28.1
-pytest==8.3.4
-pytest-asyncio==0.25.0
+# httpx pinned to supabase 2.10.0's constraint (<0.28,>=0.26)
+httpx==0.27.2
+
+# ── LLM (agent endpoint) ─────────────────────────────────────
+litellm==1.55.9
+
+# ── PDF export ───────────────────────────────────────────────
 reportlab==4.2.5
 qrcode[pil]==8.0
 pillow==11.1.0
+
+# ── Tests ────────────────────────────────────────────────────
+pytest==8.3.4
+pytest-asyncio==0.25.0

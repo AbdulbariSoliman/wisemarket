@@ -1,0 +1,13 @@
+# ============================================================
+# WISEMARKET — ETL / SCRAPER DEPENDENCIES
+# ============================================================
+# Install for data ingestion / scraping ONLY. Not needed by the
+# API container. Includes the core reqs so an ETL env is complete.
+#
+#   pip install -r requirements-etl.txt
+#   playwright install chromium      # one-time, for scraper_migros.py
+# ============================================================
+-r requirements.txt
+playwright==1.49.1
+tqdm==4.67.1
+requests==2.32.3
