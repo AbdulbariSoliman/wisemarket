@@ -6,7 +6,8 @@ from tqdm import tqdm
 
 load_dotenv()
 import sys
-sys.path.insert(0, '/workspaces/Swiss-Basket-AI')
+from backend.config.settings import ROOT_DIR_STR
+sys.path.insert(0, ROOT_DIR_STR)
 from backend.api.db import get_supabase_client
 
 PAGES_TO_FETCH   = 100

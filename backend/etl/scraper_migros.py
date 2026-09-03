@@ -9,10 +9,11 @@ import asyncio, json, os, sys, time, uuid
 from datetime import date
 from typing import Optional
 
-sys.path.insert(0, '/workspaces/Swiss-Basket-AI')
-os.chdir('/workspaces/Swiss-Basket-AI')
+from backend.config.settings import ROOT_DIR_STR, ENV_FILE_STR
+sys.path.insert(0, ROOT_DIR_STR)
+os.chdir(ROOT_DIR_STR)
 from dotenv import load_dotenv
-load_dotenv('/workspaces/Swiss-Basket-AI/.env')
+load_dotenv(ENV_FILE_STR)
 
 from playwright.async_api import async_playwright
 from tqdm import tqdm

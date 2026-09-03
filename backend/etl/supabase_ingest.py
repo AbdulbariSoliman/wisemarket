@@ -35,7 +35,9 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 # -------------------------
 # Paths
 # -------------------------
-BASE_DIR = "/workspaces/Swiss-Basket-AI/data"
+from backend.config.settings import DATA_DIR_STR
+
+BASE_DIR = DATA_DIR_STR
 PRODUCTS_DIR = os.path.join(BASE_DIR, "products_by_store")
 PRICES_DIR = os.path.join(BASE_DIR, "prices_by_store")
 ONTOLOGY_DIR = os.path.join(BASE_DIR, "ontology")
