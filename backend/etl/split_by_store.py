@@ -1,7 +1,9 @@
- import os
+import os
 import csv
 
-BASE_DIR = "/workspaces/Swiss-Basket-AI/data"
+from backend.config.settings import DATA_DIR_STR
+
+BASE_DIR = DATA_DIR_STR
 PRODUCTS_FILE = os.path.join(BASE_DIR, "products.csv")
 PRICES_FILE = os.path.join(BASE_DIR, "prices.csv")
 

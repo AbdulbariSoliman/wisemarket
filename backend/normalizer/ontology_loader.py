@@ -2,7 +2,9 @@ import csv
 import os
 from typing import Dict, List
 
-BASE_DIR = "/workspaces/Swiss-Basket-AI/data/ontology"
+from backend.config.settings import ONTOLOGY_DIR_STR
+
+BASE_DIR = ONTOLOGY_DIR_STR
 
 
 def load_ontology(base_dir: str = BASE_DIR) -> Dict[str, List[dict]]:
