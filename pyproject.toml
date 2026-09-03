@@ -1,0 +1,8 @@
+[tool.pytest.ini_options]
+markers = [
+    "integration: tests that require a seeded Postgres database (SUPABASE_URL/KEY set)",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+asyncio_default_fixture_loop_scope = "function"
