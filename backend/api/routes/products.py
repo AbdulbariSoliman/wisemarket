@@ -70,7 +70,7 @@ def search_products(
     }
     for key, value in dietary_filters.items():
         if value is True:
-            query = query.eq(f"ontology_tags->{key}", "true")
+            query = query.eq(f"ontology_tags->>{key}", "true")
 
     resp = query.range(offset, offset + limit - 1).execute()
 
