@@ -1,0 +1,48 @@
+name: CI
+on: [push, pull_request]
+
+jobs:
+  logic-tests:
+    name: Pure-logic tests (no DB)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Run logic tests (integration auto-skipped without DB)
+        env:
+          WISEMARKET_ROOT: ${{ github.workspace }}
+        run: pytest -m "not integration" -q
+
+  integration-tests:
+    name: Integration tests (seeded local Supabase)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Start Supabase (Postgres + PostgREST)
+        run: supabase start
+      - name: Apply schema + seed
+        run: |
+          DB_URL="$(supabase status -o env | grep '^DB_URL=' | cut -d= -f2- | tr -d '"')"
+          echo "Applying schema..."
+          psql "$DB_URL" -f backend/schema/schema.sql
+          echo "Applying seed..."
+          psql "$DB_URL" -f backend/schema/seed_test.sql
+      - run: pip install -r requirements.txt
+      - name: Run integration tests
+        env:
+          WISEMARKET_ROOT: ${{ github.workspace }}
+          ADMIN_API_KEY: test-admin-key
+        run: |
+          export SUPABASE_URL="$(supabase status -o env | grep '^API_URL=' | cut -d= -f2- | tr -d '"')"
+          export SUPABASE_KEY="$(supabase status -o env | grep '^ANON_KEY=' | cut -d= -f2- | tr -d '"')"
+          pytest -m integration -q

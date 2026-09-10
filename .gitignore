@@ -208,3 +208,5 @@ __marimo__/
 .env~
 frontend/wisemarket/node_modules
 frontend/wisemarket/dist
+.env.test
+supabase/
