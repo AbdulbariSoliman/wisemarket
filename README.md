@@ -1,182 +1,198 @@
+# WiseMarket 🇨🇭
 
+A smart shopping assistant that knows what's in your food, where it's cheapest, and what you can eat — in any Swiss language.
 
-**It's a hybrid — not purely any one thing.**
+WiseMarket is a Swiss grocery intelligence platform: search or scan a product, compare its price across stores, get a deterministic breakdown of dietary/nutrition/allergen flags, and query a conversational AI assistant about your shopping.
 
 ---
 
-### It has RAG elements
+## System design
+
+WiseMarket is a **retrieval-grounded, tool-using agent system** layered on top of a deterministic rules engine — not a pure LLM application. This distinction matters: the parts of the system that must never be wrong (prices, allergens, exact product matches) are handled by non-probabilistic code, and the LLM is scoped narrowly to natural-language understanding and generation.
+
+### Retrieval-augmented generation (structured, not vector)
+
+Instead of a vector store, the retrieval layer is a structured relational database (Postgres via Supabase). A user query is parsed for intent, the relevant rows are fetched via typed SQL/PostgREST queries, and only that retrieved context is passed to the LLM for generation. This is **grounded generation**: the model is never permitted to answer from parametric memory alone, which eliminates price/availability hallucination by construction rather than by prompting.
+
+### Agentic orchestration
+
+The agent layer (`backend/services/agent.py`) implements a single-pass **intent → tool-routing → generation** loop:
+
+1. **Intent classification** — an LLM call (via LiteLLM, routed to Groq-hosted models) maps the user's natural-language input to a discrete intent (search, price comparison, basket operation, general Q&A).
+2. **Tool routing** — deterministic dispatch to the matching backend function. No tool call is itself an LLM decision beyond intent classification; the actual database operations are fixed, typed, and testable in isolation.
+3. **State/memory injection** — `user_preferences` and `user_chat_history` are read and merged into context, giving the agent session-level personalization without any client-side state management.
+4. **Grounded generation** — the LLM produces the final natural-language response, constrained to the retrieved tool outputs and injected memory.
+
+This is currently a **linear single-agent pipeline**, not a multi-agent graph (no LangGraph, no supervisor/worker topology, no inter-agent message passing). It is intentionally the simplest architecture that satisfies the grounding requirement.
+
+### Deterministic decision engine (non-LLM)
+
+The dietary/nutrition/safety layer (`backend/services/decision_engine.py` + `ontology_matcher.py` + `ontology_router.py`) is pure rule-based logic — ingredient strings are parsed, matched against a curated ontology (allergens, dietary markers, additive categories), and evaluated into ~30 boolean/enum verdicts (halal, vegan, gluten-free, allergen warnings, and more). **No LLM call is in this path.** This is a deliberate architectural boundary: safety-relevant classification must be deterministic, auditable, and regression-testable — properties an LLM classifier doesn't reliably provide.
+
 ```
-User asks: "show me halal chicken"
-  ↓
-Retrieve: query Supabase for matching products
-  ↓
-Augment: pass retrieved product data to LLM
-  ↓
-Generate: LLM writes answer using only retrieved facts
+                              ┌─────────────┐
+                              │ User query  │
+                              └──────┬──────┘
+                                     ▼
+                       ┌───────────────────────────┐
+                       │ Intent detection (LLM)     │
+                       │ Groq via LiteLLM           │
+                       └─────────────┬─────────────┘
+                                     ▼
+                       ┌───────────────────────────┐
+                       │ Tool router (deterministic)│
+                       └──────┬──────────────┬─────┘
+                              ▼              ▼
+                  ┌───────────────────┐ ┌──────────────────┐
+                  │ Database tools     │ │ User memory       │
+                  │ search / prices /  │ │ preferences +     │
+                  │ basket calc        │ │ chat history      │
+                  └─────────┬──────────┘ └────────┬──────────┘
+                             └──────────┬──────────┘
+                                        ▼
+                       ┌───────────────────────────┐
+                       │ Response generation (LLM)  │
+                       │ grounded in retrieved data  │
+                       └─────────────┬─────────────┘
+                                     ▼
+                              ┌─────────────┐
+                              │ Answer      │
+                              └─────────────┘
 ```
-This is the classic RAG pattern — but instead of a vector store, we use a structured PostgreSQL database. Some call this **"Structured RAG"** or **"SQL-backed RAG"**.
 
----
+*(Rendered interactively earlier in this conversation as a diagram — same structure, ASCII fallback here for the repo.)*
 
-### It has AI Agent elements
+### Tool-calling standardization (not yet adopted)
+
+The agent's tool layer today is bespoke Python function dispatch, not a standardized protocol. **Model Context Protocol (MCP)** is a candidate standard for exposing the database tools (search, price compare, basket calc) as a uniform, introspectable tool surface that any MCP-compatible client or agent runtime could call — this would decouple the tool implementations from the specific agent loop currently hardcoded in `agent.py`, and is a natural extension point if the agent layer grows in complexity (see roadmap). It is **not currently implemented**; the only MCP surface present anywhere in this stack is an incidental one exposed by the local Supabase CLI's development tooling, unrelated to the application's own agent architecture.
+
+### Full request architecture
+
 ```
-Intent detection    ← LLM decides what to do
-Tool routing        ← deterministic DB queries
-Memory              ← user_preferences + chat_history
-Personalisation     ← adapts response per user profile
-Fallback logic      ← suggests alternatives when no match
+React (Vite) PWA
+   │  fetch → VITE_API_URL
+   ▼
+FastAPI backend
+   ├─ /analyze/{gtin}   → ontology matcher → decision engine → verdicts
+   ├─ /products/*       → search, detail, nutrition
+   ├─ /prices/*         → compare, history, latest
+   ├─ /basket/*         → calculate, nutrition, PDF export
+   ├─ /scan             → barcode → product + prices
+   └─ /agent/*          → intent detection → tool routing → grounded generation
+   │
+   ▼
+Supabase Postgres
+   public schema: products, product_prices, nutrition_facts,
+                  store_price_snapshot, price_history, user_*
+   analytics / events / etl schemas: reserved, not yet wired
+   │
+   ▲ writes
+ETL pipeline
+   scraper_migros.py (Playwright)     — live
+   ingest_open_food_facts.py (REST)   — live
+   Coop / Aldi / Lidl / Denner        — planned
 ```
-This is an **agentic** pattern — the LLM doesn't just answer, it decides which tool to use.
 
 ---
 
-### It has traditional app elements
+## Getting started
+
+```bash
+git clone <repo-url>
+cd wisemarket
+cp .env.example .env   # Supabase project URL/key, Groq API key
+pip install -r requirements.txt
+uvicorn backend.api.main:app --reload
 ```
-Price comparison    ← pure SQL, no LLM
-Barcode scanning    ← pure camera API
-PDF export          ← pure ReportLab
-Ontology matching   ← pure Python rules
-Decision engine     ← deterministic logic
+
+```bash
+cd frontend/wisemarket
+npm install
+npm run dev
 ```
-Most of the heavy lifting is **not** AI — it's deterministic, explainable, and fast.
+
+See `.env.example` for every environment variable the app reads.
+
+### Running the test suite
+
+```bash
+pytest -m "not integration" -q   # pure logic, no database needed — 71 tests
+```
+
+For the full suite including live-database integration tests, see [Testing](#testing) below.
 
 ---
 
-## How I would describe it
+## Database
 
-> **WiseMarket is a Swiss retail intelligence platform — a structured-RAG, multi-agent app that combines deterministic dietary and price logic with LLM-powered natural language understanding.**
+Schema is version-controlled at `backend/schema/schema.sql`, covering all four schemas the app touches (`public`, `analytics`, `events`, `etl`). Reproduce locally:
 
-Or more simply for non-technical people:
+```bash
+psql "<your-postgres-connection-string>" -f backend/schema/schema.sql
+```
 
-> **A smart shopping assistant that knows what's in your food, where it's cheapest, and what you can eat — and you can talk to it in any Swiss language.**
-
----
-
-## Why this architecture matters
-
-| Pure LLM app | WiseMarket |
-|---|---|
-| Hallucinates prices | Prices from real DB |
-| Can't filter by GTIN | Exact GTIN lookup |
-| No dietary rules | 30+ deterministic verdicts |
-| No memory | User preferences + history |
-| Slow and expensive | LLM only at edges |
-
-The LLM is used **surgically** — only where language understanding is needed. Everything else is fast, deterministic, and trustworthy. That's what makes it production-grade.
-
-
-
-
-
-# 🇨🇭 Swiss Basket AI — Technical README
-
-**Swiss Basket AI** is a high-integrity Retail Intelligence Platform for Switzerland.
-It synchronizes data across **Migros, Coop, and Aldi** to provide deterministic, neutral, and auditable product comparisons.
+**Current status:** Row Level Security is enabled on every `public` table, but no policies are defined. The application currently authenticates to Postgres via the Supabase `service_role` key, which bypasses RLS — a deliberate interim state until per-user JWT authentication is implemented (see [Known limitations](#known-limitations)).
 
 ---
 
-## 🧠 Core Philosophy — The Rule of Four
+## Testing
 
-1. **SQL is the Truth**
-   Prices and stock are stored and retrieved from a relational database. The AI never invents values.
+- **Pure-logic tests** (`pytest -m "not integration"`) — ingredient parser, ontology matcher, decision engine. No database required.
+- **Integration tests** (`pytest -m integration`) — real API endpoints against a live database. Require `SUPABASE_URL`/`SUPABASE_KEY` pointing at a seeded instance.
 
-2. **Logic is the Guard**
-   Safety rules (pork, alcohol, animal-derived) are enforced by a deterministic rule engine.
+Full suite locally, against a disposable local database:
 
-3. **LLM is the Voice**
-   AI is limited to intent parsing and natural language explanation.
+```bash
+supabase start                                    # local Postgres + PostgREST via Docker
+DB_URL="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+psql "$DB_URL" -f backend/schema/schema.sql
+psql "$DB_URL" -f backend/schema/seed_test.sql
 
-4. **Hash is the Law**
-   Ingredient and price updates are triggered only when cryptographic hashes change.
+export SUPABASE_URL="http://127.0.0.1:54321"
+export SUPABASE_KEY="<local SERVICE_ROLE_KEY from: supabase status -o env>"
+export ADMIN_API_KEY="test-admin-key"
+pytest -q
+```
 
----
-
-## 🏗️ System Architecture
-
-### **Tier 1 — Smart Harvester (Extraction)**
-
-* Playwright-based scrapers for Migros, Coop, and Aldi.
-* Uses ETags and price hashing to detect changes.
-* Normalizes all prices to **CHF per 100g / 100ml**.
+CI (`.github/workflows/ci.yml`) runs both tiers on every push/PR, spinning up a fresh local Supabase instance for the integration job — nothing touches production data.
 
 ---
 
-### **Tier 2 — Truth Layer (Processing)**
+## Known limitations
 
-* **Matcher:**
-  Uses embeddings for product identity matching only (never for safety decisions).
-
-* **Certifier (Rule Engine):**
-  Applies `policy_tags` using a Swiss Ingredient Ontology:
-
-  * Pork blocklist
-  * Alcohol blocklist
-
-* **Conflict Detector:**
-  Flags mismatches between marketing labels and ingredient origin.
+- **No RLS policies.** The app relies on `service_role` bypassing RLS entirely. Client-supplied `user_id` is trusted without verification — no real per-user data isolation exists yet.
+- **Ingestion coverage is partial.** Only Migros and Open Food Facts are live; Coop, Aldi, Lidl, Denner scrapers don't exist.
+- **The decision engine's output isn't surfaced client-side.** `/analyze` and the verdict pipeline work correctly and are test-covered, but the Product screen doesn't call the endpoint yet.
+- **No agent-side output validation.** The generation step has no staleness check (e.g. rejecting prices >24h old) or evidence-grounding assertion beyond what's implicit in the retrieval step.
+- **`analytics`/`events`/`etl` schemas are provisioned but unused** — no code reads or writes them yet.
 
 ---
 
-### **Tier 3 — Agentic Brain (LangGraph)**
+## Roadmap
 
-* **Intent Agent:** Converts user language into structured queries.
-* **Policy Agent:** Filters products using `policy_tags`.
-* **Validator:** Final gate. Blocks stale data (>24h) and hallucinated output.
+**Near-term**
+1. Wire `/analyze` into the Product screen — surface the decision engine's verdicts, currently the system's core differentiator, in the actual UI.
+2. Supabase Auth + real RLS policies: derive `user_id` server-side from a verified JWT; write `SELECT` policies for catalog tables (public reads) and per-user (`auth.uid() = user_id`) policies for personal data tables. Auth and RLS must ship together — switching off `service_role` before policies exist breaks every read.
 
----
+**Mid-term**
+3. Expand ingestion: Coop, Aldi, Lidl, Denner scrapers, templated off the working Migros scraper — one store at a time, fully verified before starting the next.
+4. Add an output-validation layer to the agent: reject stale prices, refuse generation without retrieved evidence, and log grounding failures for review.
+5. Evaluate exposing the database tool layer via **MCP**, decoupling tool implementations from the current hardcoded agent loop — worth revisiting once (or if) the agent's tool surface grows beyond the current three operations.
 
-### **Tier 4 — Delivery (Next.js UI)**
-
-* Displays only factual flags:
-  *“Contains pork”*, *“Contains alcohol”*.
-* No religious or lifestyle labels.
-* Every result links to the original retailer URL.
-
----
-
-## 🗂️ Data Schema (Supabase)
-
-Star Schema:
-
-* **products**
-
-  * `product_id`
-  * `ingredients_sha256`
-  * `normalized_name`
-
-* **price_history**
-
-  * `product_id`
-  * `price_chf`
-  * `price_per_100`
-  * `timestamp`
-
-* **policy_tags**
-
-  * `product_id`
-  * `contains_pork`
-  * `contains_alcohol`
-  * `contains_animal_derived`
+**Longer-term**
+6. Decide on the `analytics`/`events`/`etl` schemas: either implement the aggregation worker that populates them, or formally deprecate/remove them from the schema.
+7. Ongoing: remove unused architecture scaffolding, keep this document synchronized with the actual codebase as it evolves.
 
 ---
 
-## 🔄 Implementation Roadmap
+## License
 
-| Phase   | Focus             | Deliverable                  |
-| ------- | ----------------- | ---------------------------- |
-| Phase 1 | Data Foundation   | Supabase schema + harvesters |
-| Phase 2 | Safety & Identity | Rule engine + matcher        |
-| Phase 3 | Orchestration     | LangGraph with validator     |
-| Phase 4 | Delivery          | Comparison UI                |
+MIT License
 
----
+Copyright (c) 2026 Abdulbari Soliman
 
-## 🛡️ Safety & Neutrality Standards
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
-* No religious labeling.
-* No AI-based safety classification.
-* Prices older than 24 hours are hidden.
-* All data is source-verifiable.
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
----
-
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
