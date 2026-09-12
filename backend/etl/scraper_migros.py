@@ -166,6 +166,11 @@ def process_product(p: dict) -> Optional[tuple]:
     if not price:
         return None
 
+    quantity_raw = offer.get("quantity")
+    unit_price_data = price_data.get("unitPrice") or {}
+    price_per_100g = unit_price_data.get("value")
+    unit_price_unit = unit_price_data.get("unit")
+
     is_promo = adv_price and adv_price > price
     discount = round((1 - price/adv_price)*100, 1) if is_promo else None
 
@@ -205,6 +210,8 @@ def process_product(p: dict) -> Optional[tuple]:
         "discount_pct":       discount,
         "promotion_label":    "Aktion" if is_promo else None,
         "price_date":         TODAY,
+        "pack_size_raw":      quantity_raw,
+        "price_per_100g":     round(price_per_100g, 4) if price_per_100g is not None else None,
     }
 
     return product, price_row
