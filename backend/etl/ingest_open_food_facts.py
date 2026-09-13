@@ -17,6 +17,8 @@ BATCH_SIZE       = 50
 SLEEP_BETWEEN    = 1.0
 ONTOLOGY_VERSION = "v2.0"
 
+HEADERS = {"User-Agent": "WiseMarket/1.0 (contact: your-email@example.com)"}
+
 BASE_URL = (
     "https://world.openfoodfacts.org/cgi/search.pl"
     "?action=process"
@@ -143,7 +145,7 @@ def _float(v):
 
 def fetch_page(page):
     try:
-        resp = requests.get(f"{BASE_URL}&page={page}", timeout=30)
+        resp = requests.get(f"{BASE_URL}&page={page}", timeout=30, headers=HEADERS)
         resp.raise_for_status()
         return resp.json().get("products", [])
     except Exception as e:
