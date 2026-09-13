@@ -6,67 +6,19 @@ WiseMarket is a Swiss grocery intelligence platform: search or scan a product, c
 
 ---
 
-## System design
+## What it is
 
-WiseMarket is a **retrieval-grounded, tool-using agent system** layered on top of a deterministic rules engine — not a pure LLM application. This distinction matters: the parts of the system that must never be wrong (prices, allergens, exact product matches) are handled by non-probabilistic code, and the LLM is scoped narrowly to natural-language understanding and generation.
+WiseMarket combines three things:
 
-### Retrieval-augmented generation (structured, not vector)
+**Retrieval-grounded answers.** A user asks "what's the cheapest gluten-free pasta near me" → the app retrieves matching products from Postgres → passes that real data to an LLM → the LLM writes an answer grounded only in retrieved facts. No invented prices, no guessed availability.
 
-Instead of a vector store, the retrieval layer is a structured relational database (Postgres via Supabase). A user query is parsed for intent, the relevant rows are fetched via typed SQL/PostgREST queries, and only that retrieved context is passed to the LLM for generation. This is **grounded generation**: the model is never permitted to answer from parametric memory alone, which eliminates price/availability hallucination by construction rather than by prompting.
+**An agent layer.** The LLM detects intent, routes to the right deterministic tool (search, price compare, basket calculation), remembers user preferences and chat history, and adapts its responses per user.
 
-### Agentic orchestration
+**Deterministic core logic.** Price comparison, barcode scanning, PDF export, ingredient parsing, and the dietary decision engine are pure code — fast, explainable, not subject to hallucination. The LLM is used only where natural-language understanding is genuinely needed.
 
-The agent layer (`backend/services/agent.py`) implements a single-pass **intent → tool-routing → generation** loop:
+---
 
-1. **Intent classification** — an LLM call (via LiteLLM, routed to Groq-hosted models) maps the user's natural-language input to a discrete intent (search, price comparison, basket operation, general Q&A).
-2. **Tool routing** — deterministic dispatch to the matching backend function. No tool call is itself an LLM decision beyond intent classification; the actual database operations are fixed, typed, and testable in isolation.
-3. **State/memory injection** — `user_preferences` and `user_chat_history` are read and merged into context, giving the agent session-level personalization without any client-side state management.
-4. **Grounded generation** — the LLM produces the final natural-language response, constrained to the retrieved tool outputs and injected memory.
-
-This is currently a **linear single-agent pipeline**, not a multi-agent graph (no LangGraph, no supervisor/worker topology, no inter-agent message passing). It is intentionally the simplest architecture that satisfies the grounding requirement.
-
-### Deterministic decision engine (non-LLM)
-
-The dietary/nutrition/safety layer (`backend/services/decision_engine.py` + `ontology_matcher.py` + `ontology_router.py`) is pure rule-based logic — ingredient strings are parsed, matched against a curated ontology (allergens, dietary markers, additive categories), and evaluated into ~30 boolean/enum verdicts (halal, vegan, gluten-free, allergen warnings, and more). **No LLM call is in this path.** This is a deliberate architectural boundary: safety-relevant classification must be deterministic, auditable, and regression-testable — properties an LLM classifier doesn't reliably provide.
-
-```
-                              ┌─────────────┐
-                              │ User query  │
-                              └──────┬──────┘
-                                     ▼
-                       ┌───────────────────────────┐
-                       │ Intent detection (LLM)     │
-                       │ Groq via LiteLLM           │
-                       └─────────────┬─────────────┘
-                                     ▼
-                       ┌───────────────────────────┐
-                       │ Tool router (deterministic)│
-                       └──────┬──────────────┬─────┘
-                              ▼              ▼
-                  ┌───────────────────┐ ┌──────────────────┐
-                  │ Database tools     │ │ User memory       │
-                  │ search / prices /  │ │ preferences +     │
-                  │ basket calc        │ │ chat history      │
-                  └─────────┬──────────┘ └────────┬──────────┘
-                             └──────────┬──────────┘
-                                        ▼
-                       ┌───────────────────────────┐
-                       │ Response generation (LLM)  │
-                       │ grounded in retrieved data  │
-                       └─────────────┬─────────────┘
-                                     ▼
-                              ┌─────────────┐
-                              │ Answer      │
-                              └─────────────┘
-```
-
-*(Rendered interactively earlier in this conversation as a diagram — same structure, ASCII fallback here for the repo.)*
-
-### Tool-calling standardization (not yet adopted)
-
-The agent's tool layer today is bespoke Python function dispatch, not a standardized protocol. **Model Context Protocol (MCP)** is a candidate standard for exposing the database tools (search, price compare, basket calc) as a uniform, introspectable tool surface that any MCP-compatible client or agent runtime could call — this would decouple the tool implementations from the specific agent loop currently hardcoded in `agent.py`, and is a natural extension point if the agent layer grows in complexity (see roadmap). It is **not currently implemented**; the only MCP surface present anywhere in this stack is an incidental one exposed by the local Supabase CLI's development tooling, unrelated to the application's own agent architecture.
-
-### Full request architecture
+## Architecture
 
 ```
 React (Vite) PWA
@@ -74,24 +26,56 @@ React (Vite) PWA
    ▼
 FastAPI backend
    ├─ /analyze/{gtin}   → ontology matcher → decision engine → verdicts
-   ├─ /products/*       → search, detail, nutrition
+   ├─ /products/*       → search, detail, nutrition, unified merged view
    ├─ /prices/*         → compare, history, latest
    ├─ /basket/*         → calculate, nutrition, PDF export
    ├─ /scan             → barcode → product + prices
-   └─ /agent/*          → intent detection → tool routing → grounded generation
+   └─ /agent/*          → intent detection → DB tools → LLM (Groq, via LiteLLM)
    │
    ▼
 Supabase Postgres
    public schema: products, product_prices, nutrition_facts,
                   store_price_snapshot, price_history, user_*
-   analytics / events / etl schemas: reserved, not yet wired
+   unified_products / unified_product_members: cross-source merged
+                  products (GTIN-exact matching, live — see below)
+   analytics / events / etl schemas: reserved for future use
    │
    ▲ writes
 ETL pipeline
-   scraper_migros.py (Playwright)     — live
-   ingest_open_food_facts.py (REST)   — live
-   Coop / Aldi / Lidl / Denner        — planned
+   scraper_migros.py (Playwright)          — live, ~3,850 real products
+   ingest_open_food_facts.py (REST)        — live, ~9,490 real products
+   build_unified_products.py (GTIN merge)  — live, ~630 merged products
+   Coop / Aldi / Lidl / Denner             — planned
 ```
+
+**Frontend:** React 19 + Vite, mobile-first PWA. Pages: onboarding, home (search + deals), product detail, barcode scan, chat, basket (multi-store price comparison), profile, nearby stores (OpenStreetMap).
+
+**Backend:** FastAPI. Routes grouped by domain, plus `/analyze/{gtin}` running the full ingredient-parsing → ontology-matching → decision-engine pipeline, returning ~30 dietary/nutrition/allergen verdicts with multilingual labels. The Product screen now calls this endpoint directly, surfacing real verdicts to users instead of raw, unprocessed tags.
+
+**AI agent:** an intent → database-tool → LLM pipeline, using LiteLLM to route to Groq-hosted models.
+
+**Database:** Supabase-hosted Postgres. Schema is version-controlled at `backend/schema/schema.sql`, with incremental changes tracked in `backend/schema/migrations/`.
+
+---
+
+## Cross-source product matching (new)
+
+WiseMarket combines two real, independent data sources per product:
+
+- **Migros** (scraped live) — real Swiss retail prices, pack sizes, images. Does **not** capture ingredients or allergens by itself.
+- **Open Food Facts** (public database) — real ingredients, allergens, and nutrition facts for a global product catalog. Has **no** pricing data.
+
+Where the same product exists in both sources (matched by GTIN, the barcode — the one identifier both databases share), a **unified record** is built combining the best of each:
+
+| Data | Source | Labeled as |
+|---|---|---|
+| Name, price, image, category, source URL | Migros | `"migros"` (retailer) |
+| Ingredients, allergens, nutrition | Open Food Facts | `"open_food_facts"` (third party) |
+| Dietary/religious verdicts (halal, vegan, etc.) | Computed by the decision engine from the merged ingredients — never copied from either source | `"computed"` |
+
+Every field in a unified record carries an explicit **source label**, so it's always clear whether a piece of information came from the retailer directly or from a third-party database — nothing is presented as verified when it hasn't been.
+
+This currently covers **~630 real, verified product matches** (built via `backend/etl/build_unified_products.py`), and directly fixes a real gap: Migros' own scraped data has empty allergen/nutrition fields for essentially every product it captures, so matched products now get real, trustworthy safety data instead.
 
 ---
 
@@ -125,13 +109,14 @@ For the full suite including live-database integration tests, see [Testing](#tes
 
 ## Database
 
-Schema is version-controlled at `backend/schema/schema.sql`, covering all four schemas the app touches (`public`, `analytics`, `events`, `etl`). Reproduce locally:
+Schema is version-controlled at `backend/schema/schema.sql`, with incremental changes in `backend/schema/migrations/`. Reproduce locally:
 
 ```bash
 psql "<your-postgres-connection-string>" -f backend/schema/schema.sql
+psql "<your-postgres-connection-string>" -f backend/schema/migrations/002_unified_merge_fields.sql
 ```
 
-**Current status:** Row Level Security is enabled on every `public` table, but no policies are defined. The application currently authenticates to Postgres via the Supabase `service_role` key, which bypasses RLS — a deliberate interim state until per-user JWT authentication is implemented (see [Known limitations](#known-limitations)).
+**Current status:** Row Level Security is enabled on every `public` table, but no policies are defined yet. The application currently runs with the Supabase `service_role` key, which bypasses RLS — a deliberate interim state until per-user authentication lands (see [Known limitations](#known-limitations)).
 
 ---
 
@@ -140,48 +125,33 @@ psql "<your-postgres-connection-string>" -f backend/schema/schema.sql
 - **Pure-logic tests** (`pytest -m "not integration"`) — ingredient parser, ontology matcher, decision engine. No database required.
 - **Integration tests** (`pytest -m integration`) — real API endpoints against a live database. Require `SUPABASE_URL`/`SUPABASE_KEY` pointing at a seeded instance.
 
-Full suite locally, against a disposable local database:
-
-```bash
-supabase start                                    # local Postgres + PostgREST via Docker
-DB_URL="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
-psql "$DB_URL" -f backend/schema/schema.sql
-psql "$DB_URL" -f backend/schema/seed_test.sql
-
-export SUPABASE_URL="http://127.0.0.1:54321"
-export SUPABASE_KEY="<local SERVICE_ROLE_KEY from: supabase status -o env>"
-export ADMIN_API_KEY="test-admin-key"
-pytest -q
-```
-
 CI (`.github/workflows/ci.yml`) runs both tiers on every push/PR, spinning up a fresh local Supabase instance for the integration job — nothing touches production data.
 
 ---
 
 ## Known limitations
 
-- **No RLS policies.** The app relies on `service_role` bypassing RLS entirely. Client-supplied `user_id` is trusted without verification — no real per-user data isolation exists yet.
-- **Ingestion coverage is partial.** Only Migros and Open Food Facts are live; Coop, Aldi, Lidl, Denner scrapers don't exist.
-- **The decision engine's output isn't surfaced client-side.** `/analyze` and the verdict pipeline work correctly and are test-covered, but the Product screen doesn't call the endpoint yet.
-- **No agent-side output validation.** The generation step has no staleness check (e.g. rejecting prices >24h old) or evidence-grounding assertion beyond what's implicit in the retrieval step.
-- **`analytics`/`events`/`etl` schemas are provisioned but unused** — no code reads or writes them yet.
+- **No RLS policies.** The app relies on `service_role` bypassing RLS entirely. Client-supplied `user_id` is trusted without verification — real per-user data isolation doesn't exist yet.
+- **Migros scraper does not capture allergens, nutrition, or ingredients on its own.** Every Migros-scraped product has these fields empty by construction — the scraper's card/search API doesn't expose them. This is why the cross-source merge (above) exists; ~3,200 Migros products still have no Open Food Facts match and therefore no reliable safety data yet.
+- **Two confirmed data-quality bugs in the Migros scraper's dietary tagging**, not yet fixed:
+  - Non-food items (e.g. board games) can pass through and receive food-safety tags (halal/vegan/etc.) because the non-food filter is a small denylist rather than a positive food check.
+  - Meat-substitute products are sometimes miscategorized as meat (via naive breadcrumb keyword matching), flipping vegetarian/halal flags backwards.
+  - Both are mitigated for the ~630 unified-merge products (real ingredients replace name-guessing), but remain live for un-merged Migros products.
+- **Pack-size capture is inconsistent across product categories.** A fix was applied to capture per-100g reference pricing and pack size directly from Migros' API; per-100g pricing now works reliably, but pack-size text is populated for some categories (e.g. meat) and not others (e.g. dairy) — needs further investigation.
+- **A small number (~372) of Open Food Facts products were inadvertently removed** during a database cleanup pass and have not yet been re-ingested; the ingestion script currently always re-fetches the same fixed page range rather than resuming or targeting specific products.
+- **`analytics`/`events`/`etl` schemas exist but are unused.** Reserved for a future analytics pipeline; no code currently reads or writes them.
 
 ---
 
 ## Roadmap
 
-**Near-term**
-1. Wire `/analyze` into the Product screen — surface the decision engine's verdicts, currently the system's core differentiator, in the actual UI.
-2. Supabase Auth + real RLS policies: derive `user_id` server-side from a verified JWT; write `SELECT` policies for catalog tables (public reads) and per-user (`auth.uid() = user_id`) policies for personal data tables. Auth and RLS must ship together — switching off `service_role` before policies exist breaks every read.
-
-**Mid-term**
-3. Expand ingestion: Coop, Aldi, Lidl, Denner scrapers, templated off the working Migros scraper — one store at a time, fully verified before starting the next.
-4. Add an output-validation layer to the agent: reject stale prices, refuse generation without retrieved evidence, and log grounding failures for review.
-5. Evaluate exposing the database tool layer via **MCP**, decoupling tool implementations from the current hardcoded agent loop — worth revisiting once (or if) the agent's tool surface grows beyond the current three operations.
-
-**Longer-term**
-6. Decide on the `analytics`/`events`/`etl` schemas: either implement the aggregation worker that populates them, or formally deprecate/remove them from the schema.
-7. Ongoing: remove unused architecture scaffolding, keep this document synchronized with the actual codebase as it evolves.
+1. Expand the cross-source merge: increase Open Food Facts coverage (currently ~9,490 products, most without a Migros price match) and/or add a Migros per-product detail endpoint call for direct allergen/nutrition capture.
+2. Fix the two remaining scraper tagging bugs (non-food pass-through, meat-substitute miscategorization) directly, for products that don't have a merge match.
+3. Recover the ~372 accidentally-removed Open Food Facts products (expand ingestion page range or target by GTIN).
+4. Add Supabase Auth, derive `user_id` from a verified JWT, and write real RLS policies (public read access on catalog tables, per-user policies on personal data tables).
+5. Build out Coop/Aldi/Lidl/Denner scrapers, one store at a time, feeding the same unified-merge pipeline.
+6. A lightweight validator on the AI agent's responses (drop stale prices, refuse answers without database evidence).
+7. General cleanup and ongoing documentation upkeep.
 
 ---
 
