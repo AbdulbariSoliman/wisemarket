@@ -194,4 +194,34 @@ def get_product(
             "source_url":      p.get("source_url") or "",
         })
 
-    return {"gtin": gtin, "stores": results}
+    # Check for a GTIN-exact unified merge (Migros + third-party data)
+    unified = None
+    try:
+        uni_resp = (
+            supabase.table("unified_products")
+            .select("unified_id, canonical_name_en, canonical_name_de, "
+                    "canonical_brand, canonical_category, canonical_image_url, "
+                    "canonical_ingredients_raw, canonical_nutrition, allergens, "
+                    "field_sources")
+            .eq("canonical_gtin", gtin)
+            .limit(1)
+            .execute()
+        )
+        if uni_resp.data:
+            u = uni_resp.data[0]
+            unified = {
+                "unified_id":       u.get("unified_id"),
+                "name_en":          u.get("canonical_name_en"),
+                "name_de":          u.get("canonical_name_de"),
+                "brand":            u.get("canonical_brand"),
+                "category":         u.get("canonical_category"),
+                "image_url":        u.get("canonical_image_url"),
+                "ingredients_raw":  u.get("canonical_ingredients_raw"),
+                "nutrition":        u.get("canonical_nutrition"),
+                "allergens":        u.get("allergens"),
+                "field_sources":    u.get("field_sources") or {},
+            }
+    except Exception:
+        unified = None
+
+    return {"gtin": gtin, "stores": results, "unified": unified}
