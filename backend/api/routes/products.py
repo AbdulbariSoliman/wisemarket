@@ -6,7 +6,7 @@
 # ============================================================
 from typing import List, Literal, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Request, HTTPException, Query
 
 from backend.api.db import get_supabase_client
 from backend.config.stores import PUBLIC_STORES
@@ -152,6 +152,7 @@ def get_nutrition(gtin: str, store: Optional[str] = Query(None)):
 
 @router.get("/{gtin}")
 def get_product(
+    request: Request,
     gtin: str,
     store: Optional[str] = Query(None),
     lang: Literal["en", "de", "fr", "it"] = "en",
@@ -209,6 +210,18 @@ def get_product(
         )
         if uni_resp.data:
             u = uni_resp.data[0]
+            computed_tags = None
+            try:
+                raw_ing = u.get("canonical_ingredients_raw")
+                cat = u.get("canonical_category") or "other"
+                if raw_ing:
+                    parsed_ingredients = request.app.state.parser.normalize(raw_ing)
+                    groups = request.app.state.router.route(cat)
+                    matches = request.app.state.matcher.match(parsed_ingredients, groups)
+                    computed_tags = request.app.state.decision_engine.evaluate(matches, lang=lang)
+            except Exception:
+                computed_tags = None
+
             unified = {
                 "unified_id":       u.get("unified_id"),
                 "name_en":          u.get("canonical_name_en"),
@@ -219,6 +232,7 @@ def get_product(
                 "ingredients_raw":  u.get("canonical_ingredients_raw"),
                 "nutrition":        u.get("canonical_nutrition"),
                 "allergens":        u.get("allergens"),
+                "ontology_tags":    computed_tags,
                 "field_sources":    u.get("field_sources") or {},
             }
     except Exception:
