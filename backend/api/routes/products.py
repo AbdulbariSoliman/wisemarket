@@ -218,6 +218,36 @@ def get_product(
                     parsed_ingredients = request.app.state.parser.normalize(raw_ing)
                     groups = request.app.state.router.route(cat)
                     matches = request.app.state.matcher.match(parsed_ingredients, groups)
+
+                    try:
+                        off_resp = (
+                            supabase.table("products")
+                            .select("ontology_tags")
+                            .eq("gtin", gtin)
+                            .eq("store", "open_food_facts")
+                            .limit(1)
+                            .execute()
+                        )
+                        off_tags = (off_resp.data[0].get("ontology_tags") or {}) if off_resp.data else {}
+                    except Exception:
+                        off_tags = {}
+
+                    if off_tags.get("vegan") is True:
+                        matches.setdefault("vegan_markers", [])
+                        if "off:verified" not in matches["vegan_markers"]:
+                            matches["vegan_markers"].append("off:verified")
+
+                    if off_tags.get("gluten_free") is True:
+                        if not matches.get("coeliac_triggers"):
+                            matches.setdefault("gluten_free_labels", [])
+                            if "off:verified" not in matches["gluten_free_labels"]:
+                                matches["gluten_free_labels"].append("off:verified")
+
+                    if off_tags.get("lactose_free") is True:
+                        matches.setdefault("lactose_free_labels", [])
+                        if "off:verified" not in matches["lactose_free_labels"]:
+                            matches["lactose_free_labels"].append("off:verified")
+
                     computed_tags = request.app.state.decision_engine.evaluate(matches, lang=lang)
             except Exception:
                 computed_tags = None

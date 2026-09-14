@@ -69,13 +69,26 @@ NON_FOOD = ["shampoo", "zahnpasta", "waschpulver", "seife", "reiniger",
             "waschmittel", "körperpflege", "haarpflege", "kosmetik"]
 
 
+SUBSTITUTE_MARKERS = [
+    "ersatz", "fleischersatz", "vegan", "vegi", "pflanzlich",
+    "plant-based", "plant based", "veggie", "soja", "tofu", "seitan",
+]
+
+
 def map_category(breadcrumb: list) -> str:
+    breadcrumb_text = " ".join(c.get("name", "") for c in breadcrumb).lower()
+    matched_cat = None
     for crumb in breadcrumb:
         name = crumb.get("name", "")
         for key, cat in CATEGORY_MAP.items():
             if key.lower() in name.lower():
-                return cat
-    return "other"
+                matched_cat = cat
+                break
+        if matched_cat:
+            break
+    if matched_cat in ("meat", "fish") and any(m in breadcrumb_text for m in SUBSTITUTE_MARKERS):
+        return "plant_protein"
+    return matched_cat or "other"
 
 
 def is_non_food(name: str, breadcrumb: list) -> bool:
@@ -90,6 +103,17 @@ def build_ontology_tags(name: str, breadcrumb: list) -> dict:
     cat = map_category(breadcrumb)
     name_lower = name.lower()
 
+    # Bug A fix: if the product doesn't resolve to a known food
+    # category, don't claim any dietary/religious safety tags at
+    # all - "uncategorized" must mean unknown, never "safe."
+    if cat == "other":
+        return {
+            "halal": None, "vegetarian": None, "vegan": None,
+            "gluten_free": None, "lactose_free": None,
+            "organic": False, "regional": False,
+            "is_bio": False, "is_regional": False,
+        }
+
     has_pork    = any(x in name_lower for x in ["schwein","speck","schinken","salami","wurst","lard","porc"])
     has_alcohol = any(x in name_lower for x in ["bier","wein","wine","bière","alkohol","spirits","vodka","whisky"])
     has_halal_cert = any(x in name_lower for x in ["halal","حلال"])
@@ -103,12 +127,34 @@ def build_ontology_tags(name: str, breadcrumb: list) -> dict:
     else:
         halal = not has_pork and not has_alcohol
 
+    explicit_gluten_free = any(x in name_lower for x in
+        ["glutenfrei","gluten-frei","gluten free","sans gluten","senza glutine"])
+    contains_gluten_words = any(x in name_lower for x in
+        ["brot","pasta","mehl","weizen","gerste","dinkel","nudeln","kuchen","gebäck","teig"])
+
+    explicit_lactose_free = any(x in name_lower for x in
+        ["laktosefrei","laktose-frei","lactose free","sans lactose","senza lattosio"])
+
+    if explicit_gluten_free:
+        gluten_free_tag = True
+    elif contains_gluten_words:
+        gluten_free_tag = False
+    else:
+        gluten_free_tag = None
+
+    if explicit_lactose_free:
+        lactose_free_tag = True
+    elif cat == "dairy":
+        lactose_free_tag = False
+    else:
+        lactose_free_tag = None
+
     return {
         "halal":        halal,
         "vegetarian":   cat not in ["meat","fish"] and not has_pork,
         "vegan":        cat not in ["meat","fish","dairy"] and not has_pork,
-        "gluten_free":  not any(x in name_lower for x in ["brot","pasta","mehl","weizen","gerste","dinkel"]),
-        "lactose_free": cat != "dairy",
+        "gluten_free":  gluten_free_tag,
+        "lactose_free": lactose_free_tag,
         "organic":      is_bio,
         "regional":     is_regional,
         "is_bio":       is_bio,
