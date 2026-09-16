@@ -11,6 +11,7 @@ import StoreMap    from './pages/StoreMap'
 import Onboarding  from './pages/Onboarding'
 import Search      from './pages/Search'
 import Settings    from './pages/Settings'
+import RecipeView  from './pages/RecipeView'
 
 export default function App() {
   const [onboarded, setOnboarded] = useState(!!localStorage.getItem('onboarded'))
@@ -48,6 +49,7 @@ export default function App() {
         <Route path="/stores"     element={<StoreMap />} />
         <Route path="/search"     element={onboarded ? <Search />   : <Navigate to="/onboarding" replace />} />
         <Route path="/settings"   element={onboarded ? <Settings /> : <Navigate to="/onboarding" replace />} />
+        <Route path="/recipe/:recipeId" element={<RecipeView />} />
       </Routes>
       {onboarded && <BottomNav />}
     </BrowserRouter>

@@ -56,7 +56,16 @@ def search_products(
         query = query.eq("category", category.lower())
     if q:
         name_col = f"name_{lang}" if lang in ("en", "de", "fr", "it") else "name_en"
-        query = query.ilike(name_col, f"%{q}%")
+        words = [w for w in q.strip().split() if w]
+        if len(words) <= 1:
+            # single word - simple substring match, unchanged behavior
+            query = query.ilike(name_col, f"%{q}%")
+        else:
+            # multi-word query - match products whose name contains
+            # ANY of the individual words (e.g. recipe-ingredient style
+            # searches like "hackfleisch pasta tomaten")
+            or_clause = ",".join(f"{name_col}.ilike.%{w}%" for w in words)
+            query = query.or_(or_clause)
 
     dietary_filters = {
         "halal":        halal,

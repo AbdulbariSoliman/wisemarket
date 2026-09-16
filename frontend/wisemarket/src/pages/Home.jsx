@@ -9,13 +9,13 @@ import { track } from '../hooks/useTracking'
 const STORE_COLORS = { migros:'#E05A00', coop:'#C0001A', aldi:'#00539F', lidl:'#0050AA' }
 
 const DINNERS = [
-  { icon:'🐔', name:'Roast Chicken',    search:'poulet kartoffeln kräuter' },
-  { icon:'🍝', name:'Pasta Bolognese',  search:'hackfleisch pasta tomaten' },
-  { icon:'🥗', name:'Light Salad',      search:'salat lachs avocado' },
-  { icon:'🐟', name:'Salmon & Veg',     search:'lachs gemüse zitrone' },
-  { icon:'🧀', name:'Raclette Evening', search:'raclettekäse kartoffeln cornichons' },
-  { icon:'🍲', name:'Fondue Night',     search:'fonduekäse brot weisswein' },
-  { icon:'🍕', name:'Pizza Night',      search:'mozzarella tomaten pizza teig' },
+  { id:'roast_chicken',    icon:'🐔', name:'Roast Chicken',    search:'poulet kartoffeln kräuter' },
+  { id:'pasta_bolognese',  icon:'🍝', name:'Pasta Bolognese',  search:'hackfleisch pasta tomaten' },
+  { id:'light_salad',      icon:'🥗', name:'Light Salad',      search:'salat lachs avocado' },
+  { id:'salmon_and_veg',   icon:'🐟', name:'Salmon & Veg',     search:'lachs gemüse zitrone' },
+  { id:'raclette_evening', icon:'🧀', name:'Raclette Evening', search:'raclettekäse kartoffeln cornichons' },
+  { id:'fondue_night',     icon:'🍲', name:'Fondue Night',     search:'fonduekäse brot weisswein' },
+  { id:'pizza_night',      icon:'🍕', name:'Pizza Night',      search:'mozzarella tomaten pizza teig' },
 ]
 
 export default function Home() {
@@ -300,12 +300,12 @@ export default function Home() {
               🍽️ Tonight's dinner idea
             </h2>
             <div className="card" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }}
-              onClick={() => { setQuery(dinner.search); inputRef.current?.focus() }}>
+              onClick={() => navigate(`/recipe/${dinner.id}`)}>
               <span style={{ fontSize: 36 }}>{dinner.icon}</span>
               <div style={{ flex: 1 }}>
                 <p style={{ margin: 0, fontWeight: 600, fontSize: 15 }}>{dinner.name}</p>
                 <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--muted)' }}>
-                  Tap to find ingredients →
+                  Tap for the full recipe →
                 </p>
               </div>
               <span style={{ fontSize: 11, color: 'var(--red)', fontWeight: 600 }}>Shop →</span>
