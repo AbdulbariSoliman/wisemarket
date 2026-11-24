@@ -3,6 +3,10 @@ from backend.services.ontology_router import OntologyRouter
 UNIVERSAL = [
     "allergens", "animal_products", "promotion_terms",
     "price_unit_aliases", "sugar_synonyms", "salt_synonyms",
+    # safety groups, checked for every category
+    "pork", "alcohol", "meat", "fish_synonyms", "shellfish_synonyms",
+    "palm_oil", "coeliac_triggers", "gluten_free_labels",
+    "lactose_free_labels", "vegan_markers", "vegetarian_markers",
 ]
 
 def test_empty_returns_universal():

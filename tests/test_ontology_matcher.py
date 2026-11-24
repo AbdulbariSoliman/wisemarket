@@ -46,8 +46,9 @@ def test_match_multiple_groups():
         ["milk", "milk powder", "salt"],
         ["allergens", "animal_products"],
     )
+    # "milk powder" contains milk, so it is also a milk allergen
     assert result == {
-        "allergens": ["milk"],
+        "allergens": ["milk", "milk powder"],
         "animal_products": ["milk powder"],
     }
 

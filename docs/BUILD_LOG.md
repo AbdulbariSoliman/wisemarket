@@ -925,7 +925,7 @@ The system can:
 # What is next — remaining steps
 
 1. **Agent endpoint** — `POST /agent/query`
-   Connect chat/voice/search to Claude API. Natural language → DB query → LLM refiner → smart answer.
+   Connect chat/voice/search to an LLM (Groq via LiteLLM). Natural language → DB query → LLM refiner → smart answer.
 
 2. **Scraper pipeline**
    Python scraper agents for Migros, Coop, Aldi writing into `etl.staging_products` → validation → promote to `products`.

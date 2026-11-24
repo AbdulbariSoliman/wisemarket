@@ -1,0 +1,189 @@
+# ============================================================
+# WISEMARKET — FOOD ANALYSIS ACCURACY TESTS
+# Full pipeline: IngredientParser -> OntologyRouter -> OntologyMatcher
+# -> DecisionEngine, on REAL ingredient lists from Open Food Facts
+# (data/open_food_facts/swiss_products_p1.json) plus a few Swiss-German
+# label patterns. Expected values were checked by hand against the label.
+# No database needed.
+# ============================================================
+import pytest
+
+from backend.normalizer.ontology_loader import load_ontology
+from backend.services.decision_engine import DecisionEngine
+from backend.services.ingredient_parser import IngredientParser
+from backend.services.ontology_matcher import OntologyMatcher
+from backend.services.ontology_router import OntologyRouter
+
+PARSER = IngredientParser()
+ROUTER = OntologyRouter()
+MATCHER = OntologyMatcher(load_ontology())
+ENGINE = DecisionEngine()
+
+
+def analyse(ingredients: str, category: str = "other") -> dict:
+    parsed = PARSER.normalize(ingredients)
+    matches = MATCHER.match(parsed, ROUTER.route(category))
+    return ENGINE.evaluate(matches)
+
+
+def not_vegan(v):
+    return not v["vegan"] and not v["vegan_likely"]
+
+
+# ── Real products (Open Food Facts) ───────────────────────────
+
+NUTELLA = ("Sucre, huile de palme, NOISETTES 13%, cacao maigre 7,4%, LAIT écrémé en poudre 6,6%, "
+           "LACTOSERUM en poudre, émulsifiants: lécithines [SOJA), vanilline. Sans gluten.")
+
+GRANOLA = ("Farine de BLÉ 36%, chocolat au LAIT 27 % [sucre, pâte de cacao, beurre de cacao, lactosérum en "
+           "poudre (de LAIT), LAIT écrémé en poudre, graisses végétales (karité, palme en proportion variable), "
+           "BEURRE concentré, émulsifiants (lécithines de SOJA, E476), lactose (de LAIT), arôme], huile de palme, "
+           "farine complète de BLE 12 %, sucre, sirop de sucre, poudres à lever (carbonates de sodium, carbonates "
+           "d'ammonium), sel, correcteur d'acidité (acide citrique). Peut contenir : fruits à coque.")
+
+DARK_CHOCOLATE = ("Sucre, pâte de cacao (Afrique de l'Ouest, Amérique du Sud), beurre de cacao, émulsifiant "
+                  "(lécithine), arôme naturel de vanille de Madagascar. Cacao : 53% minimum. "
+                  "Peut contenir : LAIT, FRUITS A COQUE.")
+
+SOY_YOGURT = ("_Sojabasis_ (Wasser, geschälte _Sojabohnen_ (10,4%)], Kokosmilch (4,3%) (Kokosceme, Wasser), "
+              "Zucker, Tricalciumcitrat, Säureregulatoren (Natriumcitrate, Citronensäure), Stabilisator (Pektine), "
+              "natürliches Aroma, Meersalz, Vitamine (B12, D2), Joghurtkulturen (Str,thermophilus, L, bulgaricus).")
+
+ALMOND_DRINK = ("Lait d'amandes 98% (eau 95,2%, amandes 2,8%), amidon de riz, arôme naturel d'amande, "
+                "sel marin, stabilisants (gomme guar, gomme xanthane)")
+
+BRIOCHE = ("Farine de blé 52%, sucre, beurre frais 10%, œufs entiers frais 8%, eau, crème fraîche 3%, sel, "
+           "arômes naturels (contient alcool), levure, gluten de blé, eau de vie, protéines de lait(E471), "
+           "levure désactivée, colorant (béta carotène)")
+
+CRUESLY = ("_avoine_ complète (32%), _blé_ complet (18%), sirop de glucose, huile de tournesol, sucre, "
+           "_amandes_ grillées (4,2%), _noisettes_ (4%), oligofructose, _noix de Pécan_ (1,5%), farine de _blé_, "
+           "farine de riz, _noix du Brésil_ (1%), miel, arômes naturels, antioxydant (tocophérol).")
+
+RYE_CRISPBREAD = ("Farine complète de SEIGLE (77 g*), farine de SEIGLE (28 g*), levure, sel. Peut contenir des "
+                  "traces de LUPIN, LAIT, MOUTARDE, GRAINES DE SÉSAME et SOJA. *en g pour 100 g de produit.")
+
+
+def test_nutella_contains_milk_and_palm_oil():
+    v = analyse(NUTELLA, "snacks")
+    assert not_vegan(v)
+    assert v["vegetarian"]
+    assert v["has_palm_oil"]
+    assert v["allergen_warning"]
+
+
+def test_granola_milk_chocolate_wheat_palm():
+    v = analyse(GRANOLA, "bakery")
+    assert not_vegan(v)
+    assert v["vegetarian"]
+    assert v["has_palm_oil"]
+    assert not v["is_gluten_free"]
+
+
+def test_dark_chocolate_with_milk_traces_stays_likely_vegan_but_warns():
+    v = analyse(DARK_CHOCOLATE, "snacks")
+    assert v["vegan_likely"]            # milk is only a "may contain" trace
+    assert v["allergen_warning"]        # ...but allergic users are still warned
+
+
+def test_soy_yogurt_cultures_are_not_dairy():
+    v = analyse(SOY_YOGURT, "dairy_alternative")
+    assert v["vegan_likely"]
+    assert v["vegetarian"]
+
+
+def test_almond_drink_is_plant_based():
+    v = analyse(ALMOND_DRINK, "dairy_alternative")
+    assert v["vegan_likely"]
+
+
+def test_brioche_with_alcohol_is_not_halal():
+    v = analyse(BRIOCHE, "bakery")
+    assert not v["halal"]               # "contient alcool", "eau de vie"
+    assert not_vegan(v)                 # butter, eggs, cream
+    assert v["vegetarian"]
+
+
+def test_opff_underscore_allergens_detect_wheat():
+    v = analyse(CRUESLY, "bakery")
+    assert not v["is_gluten_free"]      # _blé_ = wheat
+    assert not_vegan(v)                 # honey
+    assert v["vegetarian"]
+
+
+def test_rye_crispbread_traces_do_not_change_diet_verdicts():
+    v = analyse(RYE_CRISPBREAD, "bakery")
+    assert v["vegan_likely"]
+    assert v["vegetarian"]
+    assert not v["is_gluten_free"]
+
+
+# ── Swiss label patterns ──────────────────────────────────────
+
+@pytest.mark.parametrize("ingredients", [
+    "Zucker, Kakaobutter, Vollmilchpulver, Haselnüsse",
+    "Zucker, Butterreinfett, Weizenmehl",
+    "Zucker, Süssmolkenpulver, Kakaomasse",
+])
+def test_german_dairy_compounds_are_detected(ingredients):
+    v = analyse(ingredients, "snacks")
+    assert not_vegan(v)
+    assert v["vegetarian"]
+
+
+@pytest.mark.parametrize("ingredients", [
+    "Zucker, Kakaobutter, Kakaomasse",
+    "Wasser, Sojaeiweiß, Salz",
+    "Zucker, Milchsäure, Pektin",
+    "Lait de coco, sucre",
+    "Crème de marrons, sucre",
+])
+def test_plant_look_alikes_are_not_animal(ingredients):
+    v = analyse(ingredients)
+    assert v["vegan_likely"]
+
+
+def test_pork_gelatine_in_any_category():
+    v = analyse("Sucre, sirop de glucose, gélatine de porc", "snacks")
+    assert not v["halal"]
+    assert not v["vegetarian"]
+    assert not_vegan(v)
+
+
+def test_beef_gelatine_is_not_vegetarian():
+    v = analyse("Zucker, Glukosesirup, Rindergelatine", "snacks")
+    assert not v["vegetarian"]
+
+
+@pytest.mark.parametrize("ingredients", [
+    "Zucker, Kakaobutter, palmölfrei",
+    "Sucre, huile de tournesol, sans huile de palme",
+    "Sugar, sunflower oil, palm oil free",
+])
+def test_palm_oil_free_claims_are_not_palm_oil(ingredients):
+    assert not analyse(ingredients)["has_palm_oil"]
+
+
+def test_sugar_alcohols_and_spirit_vinegar_are_not_alcohol():
+    assert analyse("Zuckeralkohole (Maltit), Kakaobutter")["halal"]
+    assert analyse("Eau, vinaigre d'alcool, graines de moutarde, sel")["halal"]
+
+
+def test_sheep_milk_cheese_is_vegetarian_but_not_vegan():
+    v = analyse("Tomato pulp, sunflower oil, Pecorino Romano PDO cheese (sheep's milk, salt, rennet)")
+    assert v["vegetarian"]
+    assert not_vegan(v)
+
+
+def test_vegetable_butter_is_plant_based():
+    v = analyse("CACAHUETES (86%), beurre végétal (sal, cacao), sucre, sel.")
+    assert v["vegan_likely"]
+
+
+def test_palm_written_without_oil_word_is_detected():
+    v = analyse("Farine de blé, sucre, matières grasses végétales (palme, palmiste, colza), sel")
+    assert v["has_palm_oil"]
+
+
+def test_palm_sugar_is_not_palm_oil():
+    assert not analyse("Sucre de palme, noix de coco")["has_palm_oil"]

@@ -19,6 +19,21 @@ class OntologyRouter:
             "price_unit_aliases",
             "sugar_synonyms",
             "salt_synonyms",
+            # Safety groups: checked for every product, because they decide
+            # halal / vegan / vegetarian / gluten / palm-oil verdicts and the
+            # ingredient (e.g. gelatine, lard, wine, palm oil) can appear in
+            # any category, not only meat or snacks.
+            "pork",
+            "alcohol",
+            "meat",
+            "fish_synonyms",
+            "shellfish_synonyms",
+            "palm_oil",
+            "coeliac_triggers",
+            "gluten_free_labels",
+            "lactose_free_labels",
+            "vegan_markers",
+            "vegetarian_markers",
         ]
 
         self.category_routes = {

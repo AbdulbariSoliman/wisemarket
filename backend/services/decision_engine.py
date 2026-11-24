@@ -220,6 +220,18 @@ def _build_packages(verdicts: Dict[str, Any], lang: str = "en") -> List[Dict[str
     return packages
 
 
+_NON_VEGETARIAN_ANIMAL_WORDS = (
+    "gelatin", "gélatine", "gelatina", "collagen", "kollagen", "collagène", "collagene",
+    "lard", "schmalz", "saindoux", "strutto", "tallow", "talg", "suif", "sego",
+    "fleisch", "viande", "meat", "carne", "fish", "fisch", "poisson", "pesce",
+)
+
+
+def _has_slaughter_product(animal_hits: List[str]) -> bool:
+    """True if any animal hit is a slaughter product (gelatine, lard, meat, fish)."""
+    return any(w in hit for hit in animal_hits for w in _NON_VEGETARIAN_ANIMAL_WORDS)
+
+
 class DecisionEngine:
     """
     Convert ontology matches into product verdicts and packages.
@@ -275,12 +287,18 @@ class DecisionEngine:
         probiotic_hits      = matches.get("probiotic_prebiotic", [])
         eco_hits            = matches.get("eco_packaging", [])
         animal_welfare_hits = matches.get("animal_welfare", [])
+        meat_hits           = matches.get("meat", [])
+        fish_hits           = matches.get("fish_synonyms", [])
+        shellfish_hits      = matches.get("shellfish_synonyms", [])
+        # Animal-derived but compatible with a vegetarian diet (milk, eggs, honey)
+        # vs. ingredients that require killing an animal (meat, fish, gelatine, lard)
+        non_vegetarian_hits = pork_hits + meat_hits + fish_hits + shellfish_hits
 
         # ─── CORE VERDICTS ───────────────────────────────────────────
         halal              = not pork_hits and not alcohol_hits
         vegan              = not animal_hits and bool(vegan_marker_hits)
         vegan_likely       = not animal_hits
-        vegetarian         = not pork_hits and (bool(vegetarian_hits) or not animal_hits)
+        vegetarian         = not non_vegetarian_hits and not _has_slaughter_product(animal_hits)
         allergen_warning   = bool(allergen_hits)
         regional           = bool(regional_hits)
 
@@ -350,6 +368,7 @@ class DecisionEngine:
                 "pork_hits":        pork_hits,
                 "alcohol_hits":     alcohol_hits,
                 "animal_hits":      animal_hits,
+                "non_vegetarian_hits": non_vegetarian_hits,
                 "allergen_hits":    allergen_hits,
                 "regional_hits":    regional_hits,
                 "gluten_free_hits": gluten_free_hits,

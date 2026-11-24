@@ -2,6 +2,21 @@ import re
 from typing import List
 
 
+# "May contain traces of ..." and shared-facility statements (EN/DE/FR/IT).
+# Shared by the parser (to keep the statement as one item) and the matcher
+# (to ignore it for diet verdicts, but keep it for allergen / gluten warnings).
+TRACE_PATTERN = re.compile(
+    r"(peut contenir|peut aussi contenir|traces? (?:de|d'|éventuelles)|"
+    r"fabriqué dans un atelier|fabriqué dans une usine|"
+    r"may contain|may also contain|traces? of|"
+    r"made in a factory|produced in a factory|made in a facility|produced in a facility|"
+    r"kann spuren|kann .{0,40}?enthalten|spuren von|"
+    r"hergestellt in einem betrieb|in einem betrieb hergestellt|"
+    r"può contenere|tracce di|prodotto in uno stabilimento)",
+    re.IGNORECASE,
+)
+
+
 class IngredientParser:
     """
     Parse raw ingredient label text into a normalized flat list.
@@ -21,6 +36,7 @@ class IngredientParser:
             r"\bE[\s-]?(\d{3,4}[a-z]?)\b",
             re.IGNORECASE,
         )
+        self.trace_pattern = TRACE_PATTERN
         self.junk_pattern = re.compile(
             r"\d+\s?(%|g|kg|mg|ml|l|cl|dl)",
             re.IGNORECASE,
@@ -32,10 +48,10 @@ class IngredientParser:
         depth = 0
 
         for ch in text:
-            if ch == "(":
+            if ch in "([{":
                 depth += 1
                 current.append(ch)
-            elif ch == ")":
+            elif ch in ")]}":
                 depth = max(0, depth - 1)
                 current.append(ch)
             elif ch in ",;" and depth == 0:
@@ -58,11 +74,11 @@ class IngredientParser:
         start = None
 
         for i, ch in enumerate(text):
-            if ch == "(":
+            if ch in "([{":
                 if not stack:
                     start = i + 1
                 stack.append(ch)
-            elif ch == ")" and stack:
+            elif ch in ")]}" and stack:
                 stack.pop()
                 if not stack and start is not None:
                     results.append(text[start:i].strip())
@@ -74,7 +90,8 @@ class IngredientParser:
         item = item.lower().strip()
 
         # Remove parenthesized content from the main token
-        item = re.sub(r"\([^)]*\)", "", item).strip()
+        item = re.sub(r"[\(\[\{][^)\]}]*[\)\]\}]", "", item).strip()
+        item = item.strip("()[]{} ")
 
         # Normalize E-numbers: E 322 / E-322 -> e322
         item = self.e_number_pattern.sub(lambda m: f"e{m.group(1).lower()}", item)
@@ -90,15 +107,31 @@ class IngredientParser:
 
         return item
 
+    def _split_trace_statement(self, text: str):
+        """Split 'may contain traces of ...' off the ingredient list."""
+        m = self.trace_pattern.search(text)
+        if not m:
+            return text, ""
+        return text[: m.start()], text[m.start():]
+
     def normalize(self, raw_text: str) -> List[str]:
         if not raw_text or not raw_text.strip():
             return []
+
+        # Open Food Facts marks allergens like _blé_ / _milk_
+        raw_text = raw_text.replace("_", " ")
+
+        # Keep a "may contain ..." statement as ONE item, so it can be
+        # recognised as a trace warning instead of real ingredients.
+        raw_text, trace_text = self._split_trace_statement(raw_text)
 
         main_parts = self._split_outside_parentheses(raw_text)
         nested_parts = self._extract_parentheses_content(raw_text)
 
         combined: List[str] = []
         combined.extend(main_parts)
+        if trace_text.strip():
+            combined.append(re.sub(r"[()\[\]{}]", " ", trace_text))
 
         for nested in nested_parts:
             combined.extend(self._split_outside_parentheses(nested))

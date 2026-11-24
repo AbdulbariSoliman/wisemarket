@@ -155,7 +155,9 @@ export default function Home() {
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
             onKeyDown={e => {
-              if (e.key === 'Enter' && isGtin) navigate(`/product/${query.trim()}`)
+              if (e.key !== 'Enter') return
+              if (isGtin) navigate(`/product/${query.trim()}`)
+              else e.target.blur()  // close the mobile keyboard
             }}
             placeholder={{
               en: 'Search products...', de: 'Produkte suchen...',

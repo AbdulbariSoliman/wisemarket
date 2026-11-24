@@ -8,6 +8,7 @@ load_dotenv()
 import sys
 from backend.config.settings import ROOT_DIR_STR
 sys.path.insert(0, ROOT_DIR_STR)
+from backend.services.product_tags import tags_from_ingredients  # noqa: E402
 from backend.api.db import get_supabase_client
 
 PAGES_TO_FETCH   = 100
@@ -32,9 +33,29 @@ BASE_URL = (
     f"&page_size={PAGE_SIZE}"
 )
 
+# Open Food Facts puts most plant-based foods under a generic parent category
+# such as "Aliments et boissons à base de végétaux" ("plant-based foods AND
+# beverages"). The word "boissons"/"beverages" in that parent made cereals,
+# biscuits and spreads map to "beverages", so these parents are removed first.
+GENERIC_OFF_PARENTS = [
+    "aliments et boissons à base de végétaux", "aliments d'origine végétale",
+    "plant-based foods and beverages", "plant-based foods",
+    "pflanzliche lebensmittel und getränke", "pflanzliche lebensmittel",
+    "alimenti e bevande a base vegetale", "alimenti di origine vegetale",
+    "snacks sucrés", "sweet snacks",
+]
+
+
 def map_category(raw):
     if not raw: return "other"
     r = raw.lower()
+    for parent in GENERIC_OFF_PARENTS:
+        r = r.replace(parent, " ")
+    # Breakfast cereals / muesli / granola belong to pantry, never beverages
+    if any(x in r for x in ["céréales pour petit-déjeuner", "breakfast cereals",
+                              "frühstückscerealien", "muesli", "müesli", "müsli",
+                              "granola", "cereali per la colazione"]):
+        return "pantry"
     # Non-food first — return other immediately
     if any(x in r for x in ["cosmétique","cosmetic","hygiene","hygiène","beauté","beauty",
                               "shampoo","savon","seife","soap","nettoyant"]):
@@ -129,6 +150,15 @@ def map_ontology_tags(allergens, categories, nutriscore, name="", ingredients=""
     tags["lactose_free"] = "milk" not in contains
     tags["nut_free"]     = "nuts" not in contains and "peanuts" not in contains
     if nutriscore in ("a","b"): tags["low_sugar"] = True
+    # When the ingredient list is known, use the same analysis pipeline as
+    # /analyze/{gtin}, so search filters and product pages agree. The
+    # allergen-based values above remain the fallback for products without
+    # ingredients.
+    from_ingredients = tags_from_ingredients(ingredients, map_category(categories))
+    if from_ingredients:
+        tags.update(from_ingredients)
+        tags["lactose_free"] = tags["lactose_free"] and "milk" not in contains
+        tags["gluten_free"]  = tags["gluten_free"] and "gluten" not in contains
     return tags
 
 def clean_gtin(code):
