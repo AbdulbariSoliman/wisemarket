@@ -8,15 +8,19 @@ import time
 from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Literal, Optional, Union
 
+import httpx
 import sentry_sdk
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from postgrest.exceptions import APIError
 from pydantic import BaseModel
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
-from backend.api.db import get_supabase_client
+from backend.api.db import DatabaseConfigError, get_supabase_client
 from backend.config.stores import PUBLIC_STORES, STORES
 from backend.normalizer.ontology_loader import load_ontology
 from backend.services.decision_engine import DecisionEngine
@@ -141,6 +145,39 @@ app = FastAPI(
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# ── CORS ─────────────────────────────────────────────────────
+# Comma-separated list of allowed frontend origins, e.g.
+# CORS_ORIGINS=https://wisemarket.vercel.app,http://localhost:5173
+CORS_ORIGINS = [
+    o.strip()
+    for o in os.environ.get(
+        "CORS_ORIGINS", "http://localhost:5173,http://localhost:4173"
+    ).split(",")
+    if o.strip()
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+)
+
+
+# ── Database error handling (applies to every route) ─────────
+@app.exception_handler(DatabaseConfigError)
+@app.exception_handler(httpx.HTTPError)
+@app.exception_handler(ConnectionError)
+async def database_unavailable_handler(request: Request, exc: Exception):
+    logger.error("Database unavailable on %s: %s", request.url.path, exc)
+    return JSONResponse(status_code=503, content={"detail": "Database unavailable"})
+
+
+@app.exception_handler(APIError)
+async def database_query_error_handler(request: Request, exc: APIError):
+    logger.error("Database query failed on %s: %s", request.url.path, exc)
+    return JSONResponse(status_code=502, content={"detail": "Database query failed"})
 
 # ── Import and register route modules ────────────────────────
 from backend.api.routes import products, prices, promotions, basket, scan, agent  # noqa: E402
