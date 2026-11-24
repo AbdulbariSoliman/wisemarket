@@ -1,0 +1,2859 @@
+diff --git a/.env.example b/.env.example
+index 0665c00..77f2b34 100644
+--- a/.env.example
++++ b/.env.example
+@@ -22,6 +22,11 @@ LLM_FALLBACK_MODEL=groq/llama-3.1-8b-instant
+ # LiteLLM will need this instead of GROQ_API_KEY:
+ # OPENAI_API_KEY=<your-openai-api-key>
+ 
++# ── CORS (optional) ──────────────────────────────────────────
++# Frontend origins allowed to call the API (comma-separated).
++# Defaults to the local Vite dev/preview servers.
++CORS_ORIGINS=http://localhost:5173,http://localhost:4173
++
+ # ── Error monitoring (optional) ──────────────────────────────
+ SENTRY_DSN=
+ 
+diff --git a/.gitignore b/.gitignore
+index 86a0617..20b7fc2 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -186,7 +186,7 @@ cython_debug/
+ #  that can be found at https://github.com/github/gitignore/blob/main/Global/VisualStudioCode.gitignore
+ #  and can be added to the global gitignore or merged into this file. However, if you prefer, 
+ #  you could uncomment the following to ignore the entire vscode folder
+-# .vscode/
++.vscode/
+ 
+ # Ruff stuff:
+ .ruff_cache/
+diff --git a/.vscode/settings.json b/.vscode/settings.json
+deleted file mode 100644
+index 59c9c05..0000000
+--- a/.vscode/settings.json
++++ /dev/null
+@@ -1,3 +0,0 @@
+-{
+-    "python.pythonPath": "venv/bin/python3.12"
+-}
+\ No newline at end of file
+diff --git a/FETCH_HEAD b/FETCH_HEAD
+deleted file mode 100644
+index e69de29..0000000
+diff --git a/backend/etl/ingest_open_food_facts.py b/backend/etl/ingest_open_food_facts.py
+index 85b58d9..2c38458 100644
+--- a/backend/etl/ingest_open_food_facts.py
++++ b/backend/etl/ingest_open_food_facts.py
+@@ -8,6 +8,7 @@ load_dotenv()
+ import sys
+ from backend.config.settings import ROOT_DIR_STR
+ sys.path.insert(0, ROOT_DIR_STR)
++from backend.services.product_tags import tags_from_ingredients  # noqa: E402
+ from backend.api.db import get_supabase_client
+ 
+ PAGES_TO_FETCH   = 100
+@@ -32,9 +33,29 @@ BASE_URL = (
+     f"&page_size={PAGE_SIZE}"
+ )
+ 
++# Open Food Facts puts most plant-based foods under a generic parent category
++# such as "Aliments et boissons à base de végétaux" ("plant-based foods AND
++# beverages"). The word "boissons"/"beverages" in that parent made cereals,
++# biscuits and spreads map to "beverages", so these parents are removed first.
++GENERIC_OFF_PARENTS = [
++    "aliments et boissons à base de végétaux", "aliments d'origine végétale",
++    "plant-based foods and beverages", "plant-based foods",
++    "pflanzliche lebensmittel und getränke", "pflanzliche lebensmittel",
++    "alimenti e bevande a base vegetale", "alimenti di origine vegetale",
++    "snacks sucrés", "sweet snacks",
++]
++
++
+ def map_category(raw):
+     if not raw: return "other"
+     r = raw.lower()
++    for parent in GENERIC_OFF_PARENTS:
++        r = r.replace(parent, " ")
++    # Breakfast cereals / muesli / granola belong to pantry, never beverages
++    if any(x in r for x in ["céréales pour petit-déjeuner", "breakfast cereals",
++                              "frühstückscerealien", "muesli", "müesli", "müsli",
++                              "granola", "cereali per la colazione"]):
++        return "pantry"
+     # Non-food first — return other immediately
+     if any(x in r for x in ["cosmétique","cosmetic","hygiene","hygiène","beauté","beauty",
+                               "shampoo","savon","seife","soap","nettoyant"]):
+@@ -129,6 +150,15 @@ def map_ontology_tags(allergens, categories, nutriscore, name="", ingredients=""
+     tags["lactose_free"] = "milk" not in contains
+     tags["nut_free"]     = "nuts" not in contains and "peanuts" not in contains
+     if nutriscore in ("a","b"): tags["low_sugar"] = True
++    # When the ingredient list is known, use the same analysis pipeline as
++    # /analyze/{gtin}, so search filters and product pages agree. The
++    # allergen-based values above remain the fallback for products without
++    # ingredients.
++    from_ingredients = tags_from_ingredients(ingredients, map_category(categories))
++    if from_ingredients:
++        tags.update(from_ingredients)
++        tags["lactose_free"] = tags["lactose_free"] and "milk" not in contains
++        tags["gluten_free"]  = tags["gluten_free"] and "gluten" not in contains
+     return tags
+ 
+ def clean_gtin(code):
+diff --git a/backend/schema/migrations/003_seed_ontology_versions.sql b/backend/schema/migrations/003_seed_ontology_versions.sql
+new file mode 100644
+index 0000000..7101037
+--- /dev/null
++++ b/backend/schema/migrations/003_seed_ontology_versions.sql
+@@ -0,0 +1,15 @@
++-- ============================================================
++-- 003 — Seed ontology versions
++-- products.ontology_version references ontology_versions(version).
++-- The ETL scripts write 'v1.0' (supabase_ingest.py) and 'v2.0'
++-- (scraper_migros.py, ingest_open_food_facts.py), so both must exist
++-- before ingestion can run on a fresh database. Idempotent.
++-- ============================================================
++INSERT INTO public.ontology_versions (version, notes) VALUES
++    ('v1.0', 'Initial ontology (66 categories, EN/DE/FR/IT)'),
++    ('v2.0', 'Expanded category routing; used by the Migros scraper and Open Food Facts ingestion')
++ON CONFLICT (version) DO NOTHING;
++
++INSERT INTO public.ontology_current (lock, version)
++VALUES (true, 'v2.0')
++ON CONFLICT (lock) DO NOTHING;
+diff --git a/backend/services/decision_engine.py b/backend/services/decision_engine.py
+index 1b6fc12..81459a0 100644
+--- a/backend/services/decision_engine.py
++++ b/backend/services/decision_engine.py
+@@ -220,6 +220,18 @@ def _build_packages(verdicts: Dict[str, Any], lang: str = "en") -> List[Dict[str
+     return packages
+ 
+ 
++_NON_VEGETARIAN_ANIMAL_WORDS = (
++    "gelatin", "gélatine", "gelatina", "collagen", "kollagen", "collagène", "collagene",
++    "lard", "schmalz", "saindoux", "strutto", "tallow", "talg", "suif", "sego",
++    "fleisch", "viande", "meat", "carne", "fish", "fisch", "poisson", "pesce",
++)
++
++
++def _has_slaughter_product(animal_hits: List[str]) -> bool:
++    """True if any animal hit is a slaughter product (gelatine, lard, meat, fish)."""
++    return any(w in hit for hit in animal_hits for w in _NON_VEGETARIAN_ANIMAL_WORDS)
++
++
+ class DecisionEngine:
+     """
+     Convert ontology matches into product verdicts and packages.
+@@ -275,12 +287,18 @@ class DecisionEngine:
+         probiotic_hits      = matches.get("probiotic_prebiotic", [])
+         eco_hits            = matches.get("eco_packaging", [])
+         animal_welfare_hits = matches.get("animal_welfare", [])
++        meat_hits           = matches.get("meat", [])
++        fish_hits           = matches.get("fish_synonyms", [])
++        shellfish_hits      = matches.get("shellfish_synonyms", [])
++        # Animal-derived but compatible with a vegetarian diet (milk, eggs, honey)
++        # vs. ingredients that require killing an animal (meat, fish, gelatine, lard)
++        non_vegetarian_hits = pork_hits + meat_hits + fish_hits + shellfish_hits
+ 
+         # ─── CORE VERDICTS ───────────────────────────────────────────
+         halal              = not pork_hits and not alcohol_hits
+         vegan              = not animal_hits and bool(vegan_marker_hits)
+         vegan_likely       = not animal_hits
+-        vegetarian         = not pork_hits and (bool(vegetarian_hits) or not animal_hits)
++        vegetarian         = not non_vegetarian_hits and not _has_slaughter_product(animal_hits)
+         allergen_warning   = bool(allergen_hits)
+         regional           = bool(regional_hits)
+ 
+@@ -350,6 +368,7 @@ class DecisionEngine:
+                 "pork_hits":        pork_hits,
+                 "alcohol_hits":     alcohol_hits,
+                 "animal_hits":      animal_hits,
++                "non_vegetarian_hits": non_vegetarian_hits,
+                 "allergen_hits":    allergen_hits,
+                 "regional_hits":    regional_hits,
+                 "gluten_free_hits": gluten_free_hits,
+diff --git a/backend/services/ingredient_parser.py b/backend/services/ingredient_parser.py
+index b279e61..fda8c85 100644
+--- a/backend/services/ingredient_parser.py
++++ b/backend/services/ingredient_parser.py
+@@ -2,6 +2,21 @@ import re
+ from typing import List
+ 
+ 
++# "May contain traces of ..." and shared-facility statements (EN/DE/FR/IT).
++# Shared by the parser (to keep the statement as one item) and the matcher
++# (to ignore it for diet verdicts, but keep it for allergen / gluten warnings).
++TRACE_PATTERN = re.compile(
++    r"(peut contenir|peut aussi contenir|traces? (?:de|d'|éventuelles)|"
++    r"fabriqué dans un atelier|fabriqué dans une usine|"
++    r"may contain|may also contain|traces? of|"
++    r"made in a factory|produced in a factory|made in a facility|produced in a facility|"
++    r"kann spuren|kann .{0,40}?enthalten|spuren von|"
++    r"hergestellt in einem betrieb|in einem betrieb hergestellt|"
++    r"può contenere|tracce di|prodotto in uno stabilimento)",
++    re.IGNORECASE,
++)
++
++
+ class IngredientParser:
+     """
+     Parse raw ingredient label text into a normalized flat list.
+@@ -21,6 +36,7 @@ class IngredientParser:
+             r"\bE[\s-]?(\d{3,4}[a-z]?)\b",
+             re.IGNORECASE,
+         )
++        self.trace_pattern = TRACE_PATTERN
+         self.junk_pattern = re.compile(
+             r"\d+\s?(%|g|kg|mg|ml|l|cl|dl)",
+             re.IGNORECASE,
+@@ -32,10 +48,10 @@ class IngredientParser:
+         depth = 0
+ 
+         for ch in text:
+-            if ch == "(":
++            if ch in "([{":
+                 depth += 1
+                 current.append(ch)
+-            elif ch == ")":
++            elif ch in ")]}":
+                 depth = max(0, depth - 1)
+                 current.append(ch)
+             elif ch in ",;" and depth == 0:
+@@ -58,11 +74,11 @@ class IngredientParser:
+         start = None
+ 
+         for i, ch in enumerate(text):
+-            if ch == "(":
++            if ch in "([{":
+                 if not stack:
+                     start = i + 1
+                 stack.append(ch)
+-            elif ch == ")" and stack:
++            elif ch in ")]}" and stack:
+                 stack.pop()
+                 if not stack and start is not None:
+                     results.append(text[start:i].strip())
+@@ -74,7 +90,8 @@ class IngredientParser:
+         item = item.lower().strip()
+ 
+         # Remove parenthesized content from the main token
+-        item = re.sub(r"\([^)]*\)", "", item).strip()
++        item = re.sub(r"[\(\[\{][^)\]}]*[\)\]\}]", "", item).strip()
++        item = item.strip("()[]{} ")
+ 
+         # Normalize E-numbers: E 322 / E-322 -> e322
+         item = self.e_number_pattern.sub(lambda m: f"e{m.group(1).lower()}", item)
+@@ -90,15 +107,31 @@ class IngredientParser:
+ 
+         return item
+ 
++    def _split_trace_statement(self, text: str):
++        """Split 'may contain traces of ...' off the ingredient list."""
++        m = self.trace_pattern.search(text)
++        if not m:
++            return text, ""
++        return text[: m.start()], text[m.start():]
++
+     def normalize(self, raw_text: str) -> List[str]:
+         if not raw_text or not raw_text.strip():
+             return []
+ 
++        # Open Food Facts marks allergens like _blé_ / _milk_
++        raw_text = raw_text.replace("_", " ")
++
++        # Keep a "may contain ..." statement as ONE item, so it can be
++        # recognised as a trace warning instead of real ingredients.
++        raw_text, trace_text = self._split_trace_statement(raw_text)
++
+         main_parts = self._split_outside_parentheses(raw_text)
+         nested_parts = self._extract_parentheses_content(raw_text)
+ 
+         combined: List[str] = []
+         combined.extend(main_parts)
++        if trace_text.strip():
++            combined.append(re.sub(r"[()\[\]{}]", " ", trace_text))
+ 
+         for nested in nested_parts:
+             combined.extend(self._split_outside_parentheses(nested))
+diff --git a/backend/services/ontology_matcher.py b/backend/services/ontology_matcher.py
+index 6add572..aaea442 100644
+--- a/backend/services/ontology_matcher.py
++++ b/backend/services/ontology_matcher.py
+@@ -1,52 +1,223 @@
+-from typing import Dict, List, Set
++import re
++from typing import Dict, List, Pattern, Set, Tuple
++
++from backend.services.ingredient_parser import TRACE_PATTERN
++
++
++# Phrases that contain an animal / palm word but are NOT that ingredient.
++# They are removed from an ingredient before matching the groups below.
++PLANT_EXCEPTIONS = [
++    # cocoa / nut / shea "butter"
++    "cocoa butter", "beurre de cacao", "kakaobutter", "burro di cacao",
++    "peanut butter", "beurre de cacahuète", "beurre de cacahuete", "erdnussbutter",
++    "burro di arachidi", "shea butter", "beurre de karité", "sheabutter",
++    "nut butter", "nussbutter", "almond butter", "mandelbutter",
++    "beurre végétal", "beurre vegetal", "vegetable butter", "plant butter",
++    "pflanzliche butter", "pflanzenbutter", "burro vegetale",
++    # plant "milks" and creams
++    "coconut milk", "lait de coco", "kokosmilch", "latte di cocco",
++    "coconut cream", "crème de coco", "kokoscreme", "kokosnusscreme",
++    "almond milk", "lait d'amande", "mandelmilch", "latte di mandorla",
++    "oat milk", "lait d'avoine", "hafermilch", "latte d'avena",
++    "soy milk", "soya milk", "lait de soja", "sojamilch", "latte di soia",
++    "rice milk", "lait de riz", "reismilch", "latte di riso",
++    # not dairy despite the name
++    "milchsäure", "milchsaeure", "lactic acid", "acide lactique", "acido lattico",
++    "cream of tartar", "crème de tartre", "honigmelone", "honeydew",
++    # German "Eiweiß" also means protein in general: plant proteins are not egg
++    "sojaeiweiß", "sojaeiweiss", "erbseneiweiß", "erbseneiweiss",
++    "weizeneiweiß", "weizeneiweiss", "pflanzeneiweiß", "pflanzeneiweiss",
++    "pflanzliches eiweiß", "pflanzliches eiweiss", "reiseiweiß", "reiseiweiss",
++    # sugar alcohols (polyols) are not alcohol
++    "zuckeralkohol", "zuckeralkohole", "sugar alcohol", "sugar alcohols",
++    "polyalcool", "polyalcools", "alcool de sucre", "alcol di zucchero",
++    # yogurt cultures / lactic ferments are bacteria, not dairy
++    "joghurtkulturen", "joghurtkultur", "yoghurtkulturen", "yogurt cultures",
++    "yoghurt cultures", "cultures de yaourt", "ferments de yaourt", "fermenti lattici",
++    # vinegars made from spirit or cider (wine vinegar stays in the alcohol list)
++    "vinaigre d'alcool", "spirit vinegar", "branntweinessig", "aceto di alcol",
++    "cider vinegar", "apple cider vinegar", "vinaigre de cidre", "apfelessig", "aceto di mele",
++    # palm SUGAR is not palm oil
++    "sucre de palme", "sucre de fleur de coco", "palm sugar", "palmzucker", "zucchero di palma",
++]
++
++# "May contain traces of ..." statements: for allergen and gluten groups they
++# still count (they matter to allergic / coeliac users); for diet groups such as
++# vegan, vegetarian, halal or palm oil they are not ingredients and are ignored.
++TRACE_RELEVANT_GROUPS = {
++    "allergens", "coeliac_triggers", "nut_synonyms", "soy_synonyms",
++    "sesame_synonyms", "mustard_synonyms",
++}
++
++# Animal NAMES used for dairy / eggs: "sheep's milk" or "Ziegenkäse" is not meat.
++# Removed only for the meat / fish groups, so the milk still counts as dairy.
++MEAT_GROUP_EXCEPTIONS = [
++    "sheep's milk", "sheep milk", "goat's milk", "goat milk", "buffalo milk",
++    "lait de brebis", "lait de chèvre", "lait de bufflonne", "fromage de brebis", "fromage de chèvre",
++    "schafmilch", "ziegenmilch", "büffelmilch", "schafkäse", "ziegenkäse",
++    "latte di pecora", "latte di capra", "latte di bufala", "formaggio di pecora", "formaggio di capra",
++    "chicken egg", "hen's egg", "œuf de poule", "oeuf de poule", "hühnerei", "uovo di gallina",
++]
++MEAT_GROUPS = {"meat", "pork", "fish_synonyms", "shellfish_synonyms"}
++
++# Groups where a hit means "the product CONTAINS this". For these groups,
++# terms that are really claims of absence are ignored (see EXCLUDED_TERM_KEYS),
++# and phrases preceded/followed by a negation ("sans", "ohne", "-free") are skipped.
++PRESENCE_GROUPS = {
++    "allergens", "animal_products", "meat", "pork", "fish_synonyms",
++    "shellfish_synonyms", "egg_synonyms", "alcohol", "palm_oil", "caffeine",
++    "coeliac_triggers", "nut_synonyms", "soy_synonyms", "sesame_synonyms",
++    "mustard_synonyms", "sulphite_markers", "histamine_triggers",
++    "artificial_sweeteners", "sugar_synonyms",
++}
++
++# Ontology rows inside presence groups that describe the ABSENCE of the
++# ingredient, or that are too vague to count as presence.
++EXCLUDED_TERM_KEYS = {
++    "palm_oil": {"palm_free", "vegetable_fat"},
++    "egg_synonyms": {"egg_free", "free_range_egg"},
++}
++
++NEGATION_BEFORE = re.compile(
++    r"(?:\b(?:sans|ohne|without|no|senza|kein|keine|zéro|zero|free from|frei von)\s+(?:[\w']+\s+){0,3})$",
++    re.IGNORECASE,
++)
++NEGATION_AFTER = re.compile(r"^\s*-?\s*(?:free|frei)\b", re.IGNORECASE)
++
++# German compound words: "Vollmilchpulver" contains "milch". For German terms
++# of at least this length, a match inside a longer word is accepted.
++GERMAN_COMPOUND_MIN_LEN = 5
+ 
+ 
+ class OntologyMatcher:
+     """
+     Match normalized ingredient tokens against selected ontology groups.
+ 
+-    Version 1:
+-    - receives ontology data already loaded in memory
+-    - checks only routed groups
+-    - returns matched ingredient tokens per group
++    Version 2:
++    - exact match of the whole ingredient (as in version 1), plus
++    - phrase match inside a longer ingredient on whole words
++      ("lait" in "lait écrémé en poudre"), plus
++    - German compound match for longer German terms
++      ("milch" in "vollmilchpulver"), while
++    - ignoring plant-based look-alikes ("beurre de cacao", "lait de coco"),
++    - ignoring negated phrases in presence groups ("sans huile de palme"),
++    - ignoring absence/vague rows in presence groups (palm_free, vegetable_fat).
++    Returns matched ingredient tokens per group (same shape as version 1).
+     """
+ 
+     def __init__(self, ontology_data: Dict[str, List[dict]]) -> None:
+         self.ontology_index = self._build_index(ontology_data)
++        self.phrase_index = self._build_phrase_index(ontology_data)
++        self._exceptions = sorted(PLANT_EXCEPTIONS, key=len, reverse=True)
++        self._meat_exceptions = sorted(MEAT_GROUP_EXCEPTIONS, key=len, reverse=True)
++
++    # ── index building ─────────────────────────────────────────
++
++    @staticmethod
++    def _terms(row: dict, keys=("term", "en", "de", "fr", "it")) -> Set[str]:
++        terms: Set[str] = set()
++        for key in keys:
++            value = row.get(key)
++            if not value:
++                continue
++            for part in str(value).split(";"):
++                token = part.strip().lower().replace("_", " ")
++                if token:
++                    terms.add(token)
++        return terms
+ 
+     def _build_index(self, ontology_data: Dict[str, List[dict]]) -> Dict[str, Set[str]]:
+         index: Dict[str, Set[str]] = {}
+-
+         for group_name, rows in ontology_data.items():
++            excluded = EXCLUDED_TERM_KEYS.get(group_name, set())
+             terms: Set[str] = set()
++            for row in rows:
++                if row.get("term") in excluded:
++                    continue
++                terms |= self._terms(row)
++            index[group_name] = terms
++        return index
+ 
++    def _build_phrase_index(
++        self, ontology_data: Dict[str, List[dict]]
++    ) -> Dict[str, List[Tuple[str, Pattern, bool]]]:
++        """Per group: (phrase, compiled whole-word regex, allow_compound)."""
++        index: Dict[str, List[Tuple[str, Pattern, bool]]] = {}
++        for group_name, rows in ontology_data.items():
++            excluded = EXCLUDED_TERM_KEYS.get(group_name, set())
++            german: Set[str] = set()
+             for row in rows:
+-                for key in ("term", "en", "de", "fr", "it"):
+-                    value = row.get(key)
+-                    if not value:
+-                        continue
++                if row.get("term") in excluded:
++                    continue
++                german |= self._terms(row, keys=("de",))
++            phrases = self.ontology_index.get(group_name, set())
++            entries = []
++            for phrase in sorted(phrases, key=len, reverse=True):
++                if len(phrase) < 3:
++                    continue  # too short to match safely inside other text
++                pattern = re.compile(r"(?<!\w)" + re.escape(phrase) + r"(?!\w)")
++                compound = (
++                    phrase in german
++                    and len(phrase) >= GERMAN_COMPOUND_MIN_LEN
++                    and " " not in phrase
++                )
++                entries.append((phrase, pattern, compound))
++            index[group_name] = entries
++        return index
+ 
+-                    for part in str(value).split(";"):
+-                        token = part.strip().lower()
+-                        if token:
+-                            terms.add(token)
++    # ── matching ───────────────────────────────────────────────
+ 
+-            index[group_name] = terms
++    def _strip_exceptions(self, text: str, group: str = "") -> str:
++        phrases = self._exceptions
++        if group in MEAT_GROUPS:
++            phrases = self._meat_exceptions + self._exceptions
++        for phrase in phrases:
++            if phrase in text:
++                text = text.replace(phrase, " ")
++        return text
+ 
+-        return index
++    @staticmethod
++    def _negated(text: str, start: int, end: int) -> bool:
++        return bool(NEGATION_BEFORE.search(text[:start]) or NEGATION_AFTER.match(text[end:]))
++
++    def _phrase_hit(self, text: str, group: str) -> bool:
++        presence = group in PRESENCE_GROUPS
++        for phrase, pattern, compound in self.phrase_index.get(group, []):
++            for m in pattern.finditer(text):
++                if presence and self._negated(text, m.start(), m.end()):
++                    continue
++                return True
++            if compound and phrase in text:
++                # inside a German compound word, e.g. "vollmilchpulver"
++                idx = text.find(phrase)
++                while idx != -1:
++                    if not (presence and self._negated(text, idx, idx + len(phrase))):
++                        return True
++                    idx = text.find(phrase, idx + 1)
++        return False
+ 
+     def match(self, ingredients: List[str], groups: List[str]) -> Dict[str, List[str]]:
+         results: Dict[str, List[str]] = {}
+ 
+         for group in groups:
+             group_terms = self.ontology_index.get(group, set())
++            presence = group in PRESENCE_GROUPS
+             matched: List[str] = []
+ 
+             for ingredient in ingredients:
+                 ingredient_norm = ingredient.strip().lower()
+-                if ingredient_norm in group_terms:
++                if not ingredient_norm:
++                    continue
++                if group not in TRACE_RELEVANT_GROUPS and TRACE_PATTERN.search(ingredient_norm):
++                    continue
++                text = self._strip_exceptions(ingredient_norm, group) if presence else ingredient_norm
++                text = re.sub(r"\s+", " ", text).strip()
++
++                if ingredient_norm in group_terms and text == ingredient_norm:
++                    matched.append(ingredient_norm)
++                elif text and self._phrase_hit(text, group):
+                     matched.append(ingredient_norm)
+ 
+             results[group] = matched
+ 
+-        return results
+\ No newline at end of file
++        return results
+diff --git a/backend/services/ontology_router.py b/backend/services/ontology_router.py
+index f5fff1a..fd2b63d 100644
+--- a/backend/services/ontology_router.py
++++ b/backend/services/ontology_router.py
+@@ -19,6 +19,21 @@ class OntologyRouter:
+             "price_unit_aliases",
+             "sugar_synonyms",
+             "salt_synonyms",
++            # Safety groups: checked for every product, because they decide
++            # halal / vegan / vegetarian / gluten / palm-oil verdicts and the
++            # ingredient (e.g. gelatine, lard, wine, palm oil) can appear in
++            # any category, not only meat or snacks.
++            "pork",
++            "alcohol",
++            "meat",
++            "fish_synonyms",
++            "shellfish_synonyms",
++            "palm_oil",
++            "coeliac_triggers",
++            "gluten_free_labels",
++            "lactose_free_labels",
++            "vegan_markers",
++            "vegetarian_markers",
+         ]
+ 
+         self.category_routes = {
+diff --git a/backend/services/product_tags.py b/backend/services/product_tags.py
+new file mode 100644
+index 0000000..246ff51
+--- /dev/null
++++ b/backend/services/product_tags.py
+@@ -0,0 +1,63 @@
++# ============================================================
++# WISEMARKET — STORED PRODUCT TAGS
++# ============================================================
++# Computes the `ontology_tags` JSON stored on each product, which the
++# search filters use (/products/search?vegan=true, ...).
++#
++# It runs the SAME pipeline as /analyze/{gtin}:
++#   IngredientParser -> OntologyRouter -> OntologyMatcher -> DecisionEngine
++# so search results and product pages always agree.
++# ============================================================
++from functools import lru_cache
++from typing import Dict, Optional
++
++from backend.normalizer.ontology_loader import load_ontology
++from backend.services.decision_engine import DecisionEngine
++from backend.services.ingredient_parser import IngredientParser
++from backend.services.ontology_matcher import OntologyMatcher
++from backend.services.ontology_router import OntologyRouter
++
++
++@lru_cache(maxsize=1)
++def _pipeline():
++    return IngredientParser(), OntologyRouter(), OntologyMatcher(load_ontology()), DecisionEngine()
++
++
++def tags_from_ingredients(ingredients_raw: str, category: Optional[str] = None) -> Optional[Dict[str, bool]]:
++    """
++    Tags for the search filters, derived from the ingredient list.
++    Returns None when there are no ingredients (the caller keeps its fallback).
++
++    Search-filter meaning:
++      vegan        -> no animal ingredient found (traces ignored)
++      vegetarian   -> no meat, fish, gelatine or lard found
++      halal        -> no pork or alcohol found
++      gluten_free  -> no gluten grain found (traces count)
++      lactose_free -> no milk ingredient found, or labelled lactose-free
++      palm_oil     -> palm oil found
++    """
++    if not ingredients_raw or not ingredients_raw.strip():
++        return None
++
++    parser, router, matcher, engine = _pipeline()
++    parsed = parser.normalize(ingredients_raw)
++    if not parsed:
++        return None
++
++    matches = matcher.match(parsed, router.route(category or ""))
++    v = engine.evaluate(matches)
++
++    dairy_hits = [h for h in matches.get("animal_products", [])
++                  if any(w in h for w in ("lait", "milk", "milch", "latte", "beurre", "butter",
++                                          "burro", "crème", "cream", "sahne", "rahm", "fromage",
++                                          "cheese", "käse", "formaggio", "lactos", "whey", "molke",
++                                          "yaourt", "yogurt", "joghurt", "lattosio", "panna"))]
++
++    return {
++        "vegan":        bool(v["vegan"] or v["vegan_likely"]),
++        "vegetarian":   bool(v["vegetarian"]),
++        "halal":        bool(v["halal"]),
++        "gluten_free":  not matches.get("coeliac_triggers"),
++        "lactose_free": bool(v["is_lactose_free"]) or not dairy_hits,
++        "palm_oil":     bool(v["has_palm_oil"]),
++    }
+diff --git a/build_recipe_view.py b/build_recipe_view.py
+deleted file mode 100644
+index 2d4a5b1..0000000
+--- a/build_recipe_view.py
++++ /dev/null
+@@ -1,156 +0,0 @@
+-PATH = "frontend/wisemarket/src/pages/RecipeView.jsx"
+-
+-CONTENT = """import { useState, useEffect } from 'react'
+-import { useNavigate, useParams } from 'react-router-dom'
+-import { X, Youtube, ExternalLink } from 'lucide-react'
+-import { getCuratedRecipe, getRecipeText } from '../data/recipes'
+-import { useBasket } from '../hooks/useBasket'
+-import { api } from '../api/client'
+-
+-export default function RecipeView() {
+-  const { recipeId } = useParams()
+-  const navigate = useNavigate()
+-  const { addProduct } = useBasket()
+-  const lang = localStorage.getItem('lang') || 'en'
+-
+-  const recipe = getCuratedRecipe(recipeId)
+-  const [matches, setMatches] = useState({})
+-  const [adding, setAdding] = useState(null)
+-
+-  useEffect(() => {
+-    if (!recipe) return
+-    recipe.ingredients.forEach(ing => {
+-      api.search({ q: ing.searchTerm, lang, limit: 1 }).then(res => {
+-        setMatches(m => ({ ...m, [ing.searchTerm]: res.results?.[0] || null }))
+-      }).catch(() => {
+-        setMatches(m => ({ ...m, [ing.searchTerm]: null }))
+-      })
+-    })
+-    // eslint-disable-next-line react-hooks/exhaustive-deps
+-  }, [recipeId])
+-
+-  if (!recipe) {
+-    return (
+-      <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)' }}>
+-        <p>Recipe not found.</p>
+-        <button onClick={() => navigate(-1)} className="btn-ghost">Go back</button>
+-      </div>
+-    )
+-  }
+-
+-  const text = getRecipeText(recipe, lang)
+-  const isPending = !recipe.text[lang]
+-
+-  const handleAdd = async (ing) => {
+-    const product = matches[ing.searchTerm]
+-    if (!product) return
+-    setAdding(ing.searchTerm)
+-    addProduct({ gtin: product.gtin, name_en: product.name_en, name: product.name })
+-    setTimeout(() => setAdding(null), 600)
+-  }
+-
+-  return (
+-    <div style={{ paddingBottom: 40 }}>
+-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 16px 0' }}>
+-        <button onClick={() => navigate(-1)} className="btn-ghost" style={{ width: 'auto', padding: 8 }}>
+-          <X size={20} />
+-        </button>
+-      </div>
+-
+-      <div style={{ padding: '8px 20px 20px' }}>
+-        <h1 style={{ fontSize: 22, fontWeight: 700, margin: '8px 0 4px' }}>{text.name}</h1>
+-        <p style={{ margin: 0, color: 'var(--muted)', fontSize: 13 }}>
+-          {recipe.area} &middot; Serves {recipe.servings}
+-        </p>
+-
+-        {isPending && (
+-          <div style={{
+-            marginTop: 12, padding: '8px 12px', borderRadius: 10,
+-            background: '#fff8e1', fontSize: 12, color: 'var(--muted)',
+-          }}>
+-            This recipe isn't available in your language yet &mdash; showing English.
+-          </div>
+-        )}
+-
+-        <div style={{ marginTop: 20 }}>
+-          <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 10 }}>Ingredients</h2>
+-          {recipe.ingredients.map(ing => {
+-            const product = matches[ing.searchTerm]
+-            const label = lang === 'de' ? ing.nameDe : ing.nameEn
+-            return (
+-              <div key={ing.searchTerm} style={{
+-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+-                padding: '10px 0', borderBottom: '1px solid #eee',
+-              }}>
+-                <div>
+-                  <p style={{ margin: 0, fontSize: 14 }}>{label}</p>
+-                  <p style={{ margin: 0, fontSize: 12, color: 'var(--muted)' }}>{ing.measure}</p>
+-                </div>
+-                {product ? (
+-                  <button
+-                    onClick={() => handleAdd(ing)}
+-                    className="btn-ghost"
+-                    style={{ width: 'auto', padding: '6px 12px', fontSize: 12 }}
+-                  >
+-                    {adding === ing.searchTerm ? 'Added' : 'Add'}
+-                  </button>
+-                ) : matches[ing.searchTerm] === undefined ? (
+-                  <span style={{ fontSize: 11, color: 'var(--muted)' }}>Searching...</span>
+-                ) : (
+-                  <span style={{ fontSize: 11, color: 'var(--muted)' }}>Not found</span>
+-                )}
+-              </div>
+-            )
+-          })}
+-        </div>
+-
+-        <div style={{ marginTop: 24 }}>
+-          <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 10 }}>Steps</h2>
+-          <ol style={{ paddingLeft: 20, margin: 0 }}>
+-            {text.steps.map((step, i) => (
+-              <li key={i} style={{ marginBottom: 10, fontSize: 14, lineHeight: 1.5 }}>{step}</li>
+-            ))}
+-          </ol>
+-        </div>
+-
+-        {recipe.seeAlso && recipe.seeAlso.length > 0 && (
+-          <div style={{ marginTop: 24 }}>
+-            <h2 style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: 'var(--muted)' }}>See also</h2>
+-            {recipe.seeAlso.map((link, i) => (
+-              <a
+-                key={i}
+-                href={link.url}
+-                target="_blank"
+-                rel="noopener noreferrer"
+-                style={{
+-                  display: 'flex', alignItems: 'center', gap: 8,
+-                  fontSize: 13, color: '#0066cc', textDecoration: 'none',
+-                  marginBottom: 6,
+-                }}
+-              >
+-                <Youtube size={16} />
+-                {link.label}
+-                <ExternalLink size={12} />
+-              </a>
+-            ))}
+-          </div>
+-        )}
+-
+-        <p style={{ marginTop: 24, fontSize: 11, color: 'var(--muted)' }}>
+-          Recipe: {recipe.source.label}
+-        </p>
+-      </div>
+-    </div>
+-  )
+-}
+-"""
+-
+-
+-def main():
+-    with open(PATH, "w", encoding="utf-8") as f:
+-        f.write(CONTENT)
+-    print("Wrote " + PATH)
+-
+-
+-if __name__ == "__main__":
+-    main()
+\ No newline at end of file
+diff --git a/build_recipes_js.py b/build_recipes_js.py
+deleted file mode 100644
+index 7fc44b8..0000000
+--- a/build_recipes_js.py
++++ /dev/null
+@@ -1,438 +0,0 @@
+-PATH = "frontend/wisemarket/src/data/recipes.js"
+-
+-CONTENT = """// ============================================================
+-// WISEMARKET \u2014 CURATED RECIPES
+-// ============================================================
+-// searchTerm is always GERMAN, to match the product catalog
+-// (Migros names are DE) - regardless of which language a
+-// recipe's steps/name are displayed in.
+-//
+-// LANGUAGE STATUS: "en" and "de" are fully written and reviewed.
+-// "fr" and "it" fields exist in the shape but are NOT YET
+-// POPULATED with real content - do not display fr/it text to
+-// users until a native speaker has reviewed it. This is
+-// intentional: machine-translated cooking instructions can
+-// introduce real errors, so we're not shipping unreviewed text.
+-//
+-// seeAlso: OPTIONAL links to real external sources (chef videos,
+-// official recipe pages). LINKS ONLY - we never reproduce a
+-// chef's actual recipe text. Always legal, same as a "See also"
+-// reference in an encyclopedia article.
+-// ============================================================
+-
+-export const RECIPES = {
+-
+-  roast_chicken: {
+-    id: "roast_chicken",
+-    category: "meat",
+-    area: "Swiss",
+-    image: null,
+-    video: null,
+-    servings: 4,
+-    text: {
+-      en: {
+-        name: "Roast Chicken",
+-        steps: [
+-          "Preheat oven to 200\u00b0C.",
+-          "Pat the chicken dry, rub with olive oil, salt, and herbs inside and out.",
+-          "Peel and chop potatoes, carrots, and onions; toss with oil and salt in a roasting tray.",
+-          "Place chicken on top of the vegetables.",
+-          "Roast ~75 minutes, until the juices run clear and the vegetables are tender. Cook poultry until fully done.",
+-          "Rest 10 minutes before carving; serve with the roasted vegetables.",
+-        ],
+-      },
+-      de: {
+-        name: "Gebratenes Poulet",
+-        steps: [
+-          "Ofen auf 200\u00b0C vorheizen.",
+-          "Poulet trocken tupfen, innen und aussen mit Oliven\u00f6l, Salz und Kr\u00e4utern einreiben.",
+-          "Kartoffeln, Karotten und Zwiebeln sch\u00e4len und schneiden; mit \u00d6l und Salz in eine Bratform geben.",
+-          "Poulet auf das Gem\u00fcse legen.",
+-          "Ca. 75 Minuten braten, bis der Fleischsaft klar austritt und das Gem\u00fcse weich ist. Gefl\u00fcgel immer vollst\u00e4ndig durchgaren.",
+-          "10 Minuten ruhen lassen, dann tranchieren und mit dem Gem\u00fcse servieren.",
+-        ],
+-      },
+-      fr: null,
+-      it: null,
+-    },
+-    ingredients: [
+-      { searchTerm: "poulet",     nameEn: "Whole chicken", nameDe: "Ganzes Poulet",       measure: "1 (~1.4 kg)" },
+-      { searchTerm: "kartoffeln", nameEn: "Potatoes",      nameDe: "Kartoffeln",           measure: "800 g" },
+-      { searchTerm: "karotten",   nameEn: "Carrots",       nameDe: "Karotten",             measure: "300 g" },
+-      { searchTerm: "zwiebeln",   nameEn: "Onion",         nameDe: "Zwiebeln",             measure: "2" },
+-      { searchTerm: "olivenoel",  nameEn: "Olive oil",     nameDe: "Oliven\u00f6l",             measure: "3 tbsp" },
+-      { searchTerm: "kraeuter",   nameEn: "Fresh herbs",   nameDe: "Frische Kr\u00e4uter",      measure: "1 bunch" },
+-      { searchTerm: "salz",       nameEn: "Salt",          nameDe: "Salz",                 measure: "to taste" },
+-    ],
+-    source: { kind: "curated", label: "WiseMarket", url: null },
+-    seeAlso: [],
+-  },
+-
+-  pasta_bolognese: {
+-    id: "pasta_bolognese",
+-    category: "pantry",
+-    area: "Italian",
+-    image: null,
+-    video: null,
+-    servings: 4,
+-    text: {
+-      en: {
+-        name: "Pasta Bolognese",
+-        steps: [
+-          "Finely chop onion and garlic. Heat olive oil in a pan.",
+-          "Saut\u00e9 onion and garlic until soft.",
+-          "Add minced beef; brown thoroughly until fully cooked.",
+-          "Add chopped tomatoes, season, and simmer 20\u201330 minutes.",
+-          "Meanwhile cook spaghetti in salted water until al dente.",
+-          "Drain pasta and serve topped with the sauce.",
+-        ],
+-      },
+-      de: {
+-        name: "Pasta Bolognese",
+-        steps: [
+-          "Zwiebel und Knoblauch fein hacken. Oliven\u00f6l in einer Pfanne erhitzen.",
+-          "Zwiebel und Knoblauch and\u00fcnsten, bis sie weich sind.",
+-          "Hackfleisch dazugeben; gut anbraten, bis es vollst\u00e4ndig durchgegart ist.",
+-          "Gehackte Tomaten dazugeben, w\u00fcrzen und 20\u201330 Minuten k\u00f6cheln lassen.",
+-          "In der Zwischenzeit Spaghetti in Salzwasser al dente kochen.",
+-          "Pasta abgiessen und mit der Sauce servieren.",
+-        ],
+-      },
+-      fr: null,
+-      it: null,
+-    },
+-    ingredients: [
+-      { searchTerm: "spaghetti",   nameEn: "Spaghetti",        nameDe: "Spaghetti",          measure: "500 g" },
+-      { searchTerm: "hackfleisch", nameEn: "Minced beef",      nameDe: "Hackfleisch",        measure: "500 g" },
+-      { searchTerm: "tomaten",     nameEn: "Chopped tomatoes", nameDe: "Gehackte Tomaten",   measure: "800 g" },
+-      { searchTerm: "zwiebeln",    nameEn: "Onion",            nameDe: "Zwiebeln",           measure: "1" },
+-      { searchTerm: "knoblauch",   nameEn: "Garlic",           nameDe: "Knoblauch",          measure: "2 cloves" },
+-      { searchTerm: "olivenoel",   nameEn: "Olive oil",        nameDe: "Oliven\u00f6l",           measure: "2 tbsp" },
+-      { searchTerm: "salz",        nameEn: "Salt & pepper",    nameDe: "Salz & Pfeffer",     measure: "to taste" },
+-    ],
+-    source: { kind: "curated", label: "WiseMarket", url: null },
+-    seeAlso: [
+-      { label: "Gordon Ramsay's Spaghetti Bolognese (YouTube)", url: "https://www.youtube.com/watch?v=Sk_CGtA4HIY" },
+-    ],
+-  },
+-
+-  light_salad: {
+-    id: "light_salad",
+-    category: "fresh_produce",
+-    area: "Swiss",
+-    image: null,
+-    video: null,
+-    servings: 2,
+-    text: {
+-      en: {
+-        name: "Light Salad",
+-        steps: [
+-          "Season salmon and pan-fry until cooked through.",
+-          "Wash and tear salad leaves; slice cucumber and avocado.",
+-          "Whisk olive oil with lemon juice, salt, and pepper for the dressing.",
+-          "Toss leaves with dressing, top with cucumber, avocado, and flaked salmon.",
+-        ],
+-      },
+-      de: {
+-        name: "Leichter Salat",
+-        steps: [
+-          "Lachs w\u00fcrzen und in der Pfanne durchbraten.",
+-          "Salatbl\u00e4tter waschen und zupfen; Gurke und Avocado in Scheiben schneiden.",
+-          "Oliven\u00f6l mit Zitronensaft, Salz und Pfeffer f\u00fcr das Dressing verr\u00fchren.",
+-          "Bl\u00e4tter mit Dressing mischen, mit Gurke, Avocado und Lachsflocken garnieren.",
+-        ],
+-      },
+-      fr: null,
+-      it: null,
+-    },
+-    ingredients: [
+-      { searchTerm: "salat",     nameEn: "Mixed salad leaves", nameDe: "Gemischte Salatbl\u00e4tter", measure: "150 g" },
+-      { searchTerm: "lachs",     nameEn: "Salmon fillet",      nameDe: "Lachsfilet",              measure: "200 g" },
+-      { searchTerm: "avocado",   nameEn: "Avocado",            nameDe: "Avocado",                 measure: "1" },
+-      { searchTerm: "gurken",    nameEn: "Cucumber",           nameDe: "Gurke",                   measure: "1/2" },
+-      { searchTerm: "olivenoel", nameEn: "Olive oil",          nameDe: "Oliven\u00f6l",                measure: "2 tbsp" },
+-      { searchTerm: "zitrone",   nameEn: "Lemon",              nameDe: "Zitrone",                 measure: "1" },
+-    ],
+-    source: { kind: "curated", label: "WiseMarket", url: null },
+-    seeAlso: [],
+-  },
+-
+-  salmon_and_veg: {
+-    id: "salmon_and_veg",
+-    category: "fish",
+-    area: "Swiss",
+-    image: null,
+-    video: null,
+-    servings: 4,
+-    text: {
+-      en: {
+-        name: "Salmon & Veg",
+-        steps: [
+-          "Preheat oven to 200\u00b0C.",
+-          "Chop vegetables, toss with oil and salt, spread on a tray.",
+-          "Place salmon fillets on the tray, drizzle with oil, top with lemon slices.",
+-          "Bake ~18\u201320 minutes until the salmon is cooked through and flakes easily.",
+-        ],
+-      },
+-      de: {
+-        name: "Lachs mit Gem\u00fcse",
+-        steps: [
+-          "Ofen auf 200\u00b0C vorheizen.",
+-          "Gem\u00fcse schneiden, mit \u00d6l und Salz mischen, auf ein Blech verteilen.",
+-          "Lachsfilets auf das Blech legen, mit \u00d6l betr\u00e4ufeln, mit Zitronenscheiben belegen.",
+-          "Ca. 18\u201320 Minuten backen, bis der Lachs durchgegart ist und sich leicht mit der Gabel teilen l\u00e4sst.",
+-        ],
+-      },
+-      fr: null,
+-      it: null,
+-    },
+-    ingredients: [
+-      { searchTerm: "lachs",     nameEn: "Salmon fillets",   nameDe: "Lachsfilets",       measure: "4 (~600 g)" },
+-      { searchTerm: "gemuese",   nameEn: "Mixed vegetables", nameDe: "Gemischtes Gem\u00fcse", measure: "600 g" },
+-      { searchTerm: "zitrone",   nameEn: "Lemon",            nameDe: "Zitrone",           measure: "1" },
+-      { searchTerm: "olivenoel", nameEn: "Olive oil",        nameDe: "Oliven\u00f6l",          measure: "3 tbsp" },
+-      { searchTerm: "salz",      nameEn: "Salt & pepper",    nameDe: "Salz & Pfeffer",    measure: "to taste" },
+-    ],
+-    source: { kind: "curated", label: "WiseMarket", url: null },
+-    seeAlso: [],
+-  },
+-
+-  raclette_evening: {
+-    id: "raclette_evening",
+-    category: "dairy",
+-    area: "Swiss",
+-    image: null,
+-    video: null,
+-    servings: 4,
+-    text: {
+-      en: {
+-        name: "Raclette Evening",
+-        steps: [
+-          "Boil potatoes (skin on) until tender; keep warm.",
+-          "Slice raclette cheese for the raclette grill.",
+-          "Melt cheese in the raclette pans until bubbling.",
+-          "Serve melted cheese over potatoes with cornichons and pickled onions.",
+-        ],
+-      },
+-      de: {
+-        name: "Raclette-Abend",
+-        steps: [
+-          "Kartoffeln mit Schale kochen, bis sie weich sind; warm halten.",
+-          "Raclettek\u00e4se f\u00fcr den Raclette-Ofen in Scheiben schneiden.",
+-          "K\u00e4se in den Pf\u00e4nnchen schmelzen, bis er blubbert.",
+-          "Geschmolzenen K\u00e4se \u00fcber Kartoffeln servieren, mit Cornichons und Silberzwiebeln.",
+-        ],
+-      },
+-      fr: null,
+-      it: null,
+-    },
+-    ingredients: [
+-      { searchTerm: "raclettekaese",   nameEn: "Raclette cheese", nameDe: "Raclettek\u00e4se",   measure: "800 g" },
+-      { searchTerm: "kartoffeln",      nameEn: "Potatoes",        nameDe: "Kartoffeln",      measure: "1 kg" },
+-      { searchTerm: "cornichons",      nameEn: "Cornichons",      nameDe: "Cornichons",      measure: "1 jar" },
+-      { searchTerm: "silberzwiebeln",  nameEn: "Pickled onions",  nameDe: "Silberzwiebeln",  measure: "1 jar" },
+-    ],
+-    source: { kind: "curated", label: "WiseMarket", url: null },
+-    seeAlso: [],
+-  },
+-
+-  fondue_night: {
+-    id: "fondue_night",
+-    category: "dairy",
+-    area: "Swiss",
+-    image: null,
+-    video: null,
+-    servings: 4,
+-    text: {
+-      en: {
+-        name: "Fondue Night",
+-        steps: [
+-          "Rub the caquelon (fondue pot) with the cut garlic clove.",
+-          "Add white wine and warm gently.",
+-          "Add the cheese gradually, stirring until melted and smooth.",
+-          "Cut bread into cubes and serve for dipping. Keep the fondue warm over the burner.",
+-        ],
+-      },
+-      de: {
+-        name: "Fondue-Abend",
+-        steps: [
+-          "Caquelon (Fonduetopf) mit der aufgeschnittenen Knoblauchzehe ausreiben.",
+-          "Weisswein dazugeben und sanft erw\u00e4rmen.",
+-          "K\u00e4se nach und nach dazugeben, r\u00fchren bis er geschmolzen und glatt ist.",
+-          "Brot in W\u00fcrfel schneiden und zum Dippen servieren. Fondue \u00fcber der Flamme warm halten.",
+-        ],
+-      },
+-      fr: null,
+-      it: null,
+-    },
+-    ingredients: [
+-      { searchTerm: "fonduekaese", nameEn: "Fondue cheese mix", nameDe: "Fonduek\u00e4se-Mischung", measure: "800 g" },
+-      { searchTerm: "brot",        nameEn: "White bread",       nameDe: "Weissbrot",           measure: "1 loaf" },
+-      { searchTerm: "weisswein",   nameEn: "White wine",        nameDe: "Weisswein",           measure: "300 ml" },
+-      { searchTerm: "knoblauch",   nameEn: "Garlic",            nameDe: "Knoblauch",           measure: "1 clove" },
+-    ],
+-    source: { kind: "curated", label: "WiseMarket", url: null },
+-    seeAlso: [],
+-  },
+-
+-  pizza_night: {
+-    id: "pizza_night",
+-    category: "bakery",
+-    area: "Italian",
+-    image: null,
+-    video: null,
+-    servings: 4,
+-    text: {
+-      en: {
+-        name: "Pizza Night",
+-        steps: [
+-          "Preheat oven to its highest setting (~250\u00b0C).",
+-          "Roll out the dough and spread with passata; season.",
+-          "Top with torn mozzarella and a drizzle of olive oil.",
+-          "Bake 8\u201312 minutes until the crust is golden and cheese bubbles.",
+-          "Finish with fresh basil before serving.",
+-        ],
+-      },
+-      de: {
+-        name: "Pizza-Abend",
+-        steps: [
+-          "Ofen auf h\u00f6chste Stufe vorheizen (~250\u00b0C).",
+-          "Teig ausrollen und mit Passata bestreichen; w\u00fcrzen.",
+-          "Mit zerzupftem Mozzarella belegen und mit Oliven\u00f6l betr\u00e4ufeln.",
+-          "8\u201312 Minuten backen, bis der Rand goldbraun ist und der K\u00e4se blubbert.",
+-          "Vor dem Servieren mit frischem Basilikum garnieren.",
+-        ],
+-      },
+-      fr: null,
+-      it: null,
+-    },
+-    ingredients: [
+-      { searchTerm: "pizzateig",  nameEn: "Pizza dough",        nameDe: "Pizzateig",   measure: "2 bases" },
+-      { searchTerm: "mozzarella", nameEn: "Mozzarella",         nameDe: "Mozzarella",  measure: "250 g" },
+-      { searchTerm: "tomaten",    nameEn: "Tomatoes / passata", nameDe: "Passata",     measure: "400 g" },
+-      { searchTerm: "basilikum",  nameEn: "Basil",              nameDe: "Basilikum",   measure: "1 bunch" },
+-      { searchTerm: "olivenoel",  nameEn: "Olive oil",          nameDe: "Oliven\u00f6l",    measure: "2 tbsp" },
+-    ],
+-    source: { kind: "curated", label: "WiseMarket", url: null },
+-    seeAlso: [],
+-  },
+-
+-  zurcher_geschnetzeltes: {
+-    id: "zurcher_geschnetzeltes",
+-    category: "meat",
+-    area: "Swiss",
+-    image: null,
+-    video: null,
+-    servings: 4,
+-    text: {
+-      en: {
+-        name: "Z\u00fcrcher Geschnetzeltes",
+-        steps: [
+-          "Cut veal into thin strips.",
+-          "Sear veal strips in butter over high heat, in batches; set aside.",
+-          "In the same pan, saut\u00e9 sliced mushrooms and shallots.",
+-          "Deglaze with white wine, reduce slightly.",
+-          "Stir in cream, return the veal to the pan, and heat through until fully cooked.",
+-          "Serve with r\u00f6sti or rice.",
+-        ],
+-      },
+-      de: {
+-        name: "Z\u00fcrcher Geschnetzeltes",
+-        steps: [
+-          "Kalbfleisch in d\u00fcnne Streifen schneiden.",
+-          "Kalbfleischstreifen portionenweise in Butter bei starker Hitze anbraten; beiseitestellen.",
+-          "In derselben Pfanne Champignons und Schalotten and\u00fcnsten.",
+-          "Mit Weisswein abl\u00f6schen, leicht einkochen lassen.",
+-          "Rahm dazugeben, das Kalbfleisch zur\u00fcck in die Pfanne geben und vollst\u00e4ndig durcherhitzen.",
+-          "Mit R\u00f6sti oder Reis servieren.",
+-        ],
+-      },
+-      fr: null,
+-      it: null,
+-    },
+-    ingredients: [
+-      { searchTerm: "kalbfleisch", nameEn: "Veal",       nameDe: "Kalbfleisch",  measure: "600 g" },
+-      { searchTerm: "champignons", nameEn: "Mushrooms",  nameDe: "Champignons",  measure: "250 g" },
+-      { searchTerm: "schalotten",  nameEn: "Shallots",   nameDe: "Schalotten",   measure: "2" },
+-      { searchTerm: "weisswein",   nameEn: "White wine", nameDe: "Weisswein",    measure: "100 ml" },
+-      { searchTerm: "rahm",        nameEn: "Cream",      nameDe: "Rahm",         measure: "300 ml" },
+-      { searchTerm: "butter",      nameEn: "Butter",     nameDe: "Butter",       measure: "2 tbsp" },
+-    ],
+-    source: { kind: "curated", label: "WiseMarket", url: null },
+-    seeAlso: [],
+-  },
+-
+-  roesti: {
+-    id: "roesti",
+-    category: "pantry",
+-    area: "Swiss",
+-    image: null,
+-    video: null,
+-    servings: 4,
+-    text: {
+-      en: {
+-        name: "Swiss R\u00f6sti",
+-        steps: [
+-          "Boil potatoes whole, with skin, until just tender (not fully cooked). Cool, then grate coarsely.",
+-          "Season grated potato with salt.",
+-          "Heat butter in a non-stick pan, add potato, press into an even round.",
+-          "Fry until golden and crisp on the bottom (~10 min).",
+-          "Flip (using a plate) and fry the other side until golden and cooked through.",
+-        ],
+-      },
+-      de: {
+-        name: "Schweizer R\u00f6sti",
+-        steps: [
+-          "Kartoffeln mit Schale kochen, bis sie knapp weich sind (nicht ganz gar). Abk\u00fchlen lassen, grob raffeln.",
+-          "Geriebene Kartoffeln salzen.",
+-          "Butter in einer beschichteten Pfanne erhitzen, Kartoffeln dazugeben, zu einem gleichm\u00e4ssigen Rundling pressen.",
+-          "Braten, bis die Unterseite goldbraun und knusprig ist (~10 Min.).",
+-          "Mit einem Teller wenden und die andere Seite goldbraun und vollst\u00e4ndig durchgaren.",
+-        ],
+-      },
+-      fr: null,
+-      it: null,
+-    },
+-    ingredients: [
+-      { searchTerm: "kartoffeln", nameEn: "Potatoes", nameDe: "Kartoffeln", measure: "1 kg" },
+-      { searchTerm: "butter",     nameEn: "Butter",   nameDe: "Butter",     measure: "3 tbsp" },
+-      { searchTerm: "salz",       nameEn: "Salt",     nameDe: "Salz",       measure: "to taste" },
+-    ],
+-    source: { kind: "curated", label: "WiseMarket", url: null },
+-    seeAlso: [],
+-  },
+-
+-};
+-
+-// ============================================================
+-// Lookup helpers (curated layer, always checked first)
+-// ============================================================
+-
+-export function getCuratedRecipe(idOrName) {
+-  const key = String(idOrName || "").toLowerCase().replace(/\\s+/g, "_");
+-  if (RECIPES[key]) return RECIPES[key];
+-  return Object.values(RECIPES).find(r =>
+-    Object.values(r.text).some(t => t && t.name.toLowerCase() === String(idOrName).toLowerCase())
+-  ) || null;
+-}
+-
+-export function getRecipeText(recipe, lang) {
+-  const chosen = lang || "en";
+-  return recipe.text[chosen] || recipe.text.en;
+-}
+-
+-export function listCuratedRecipesByArea(area) {
+-  return Object.values(RECIPES).filter(r => !area || r.area === area);
+-}
+-"""
+-
+-
+-def main():
+-    with open(PATH, "w", encoding="utf-8") as f:
+-        f.write(CONTENT)
+-    print("Wrote " + PATH)
+-    print("Recipe count: " + str(CONTENT.count('id: "')))
+-
+-
+-if __name__ == "__main__":
+-    main()
+\ No newline at end of file
+diff --git a/data/all_csv_hashes.txt b/data/all_csv_hashes.txt
+deleted file mode 100644
+index c49bee5..0000000
+--- a/data/all_csv_hashes.txt
++++ /dev/null
+@@ -1,132 +0,0 @@
+-044d15c0bed209451fb49fdb273c6eb589698fa616afdb20735de7797a8dfc99  ./master_ontology_2026/sports_nutrition_markers.csv
+-044d15c0bed209451fb49fdb273c6eb589698fa616afdb20735de7797a8dfc99  ./ontology/sports_nutrition_markers.csv
+-0c2fcdd129884c14d5bdf5c3e0a1b0819eb3fd3d6fa8ed097939436d39539bfd  ./master_ontology_2026/vegetarian_markers.csv
+-0c2fcdd129884c14d5bdf5c3e0a1b0819eb3fd3d6fa8ed097939436d39539bfd  ./ontology/vegetarian_markers.csv
+-106edfe4b89825bfbf178eb4050f216d5131aaa15602d072ab43c4e2d377fbe3  ./master_ontology_2026/ancient_grains.csv
+-106edfe4b89825bfbf178eb4050f216d5131aaa15602d072ab43c4e2d377fbe3  ./ontology/ancient_grains.csv
+-4aa5084752ab48c0ecc73e071ad44e9615190dacfd206fd07cfb9b118c2f9d2b  ./master_ontology_2026/additives.csv
+-4aa5084752ab48c0ecc73e071ad44e9615190dacfd206fd07cfb9b118c2f9d2b  ./ontology/additives.csv
+-4dbc1b5111afbc3bcfb4c4e3882fc2be64b5641eacf623b698403e386ffd4081  ./master_ontology_2026/vegan_markers.csv
+-4dbc1b5111afbc3bcfb4c4e3882fc2be64b5641eacf623b698403e386ffd4081  ./ontology/vegan_markers.csv
+-506536c1b9f4955b5d2a2e569c90f62b5b78def4ccf8cf011f7acceb4f453f7b  ./master_ontology_2026/pork.csv
+-506536c1b9f4955b5d2a2e569c90f62b5b78def4ccf8cf011f7acceb4f453f7b  ./ontology/pork.csv
+-7c0f2d3755e99d46acc08c581f3c29a622f58786281d5eb2eae4c31ccac0c35f  ./master_ontology_2026/sugar_synonyms.csv
+-7c0f2d3755e99d46acc08c581f3c29a622f58786281d5eb2eae4c31ccac0c35f  ./ontology/sugar_synonyms.csv
+-ad831543a6969784889e9ce2b56e3540e071d6e515dbb0763a2f15ae0455bf11  ./master_ontology_2026/allergens.csv
+-ad831543a6969784889e9ce2b56e3540e071d6e515dbb0763a2f15ae0455bf11  ./ontology/allergens.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/animal_products.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/animal_welfare.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/antioxidant_markers.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/artificial_sweeteners.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/bee_friendly.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/bio_labels.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/brain_health_terms.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/brand_quality_tiers.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/bundle_terms.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/caffeine.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/child_friendly_markers.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/coeliac_triggers.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/diabetic_markers.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/eco_packaging.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/egg_synonyms.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/fairtrade_labels.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/fatty_acid_markers.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/fermented_food_terms.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/fiber_markers.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/fish_synonyms.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/gluten_free_labels.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/heart_health_terms.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/herbal_extracts.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/high_protein_markers.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/histamine_triggers.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/immune_support_terms.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/keto_markers.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/lactose_free_labels.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/low_fat_markers.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/low_sugar_markers.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/meat.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/mineral_markers.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/mustard_synonyms.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/nut_synonyms.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/organic_variants.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/paleo_markers.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/palm_oil.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/preservative_terms.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/price_unit_aliases.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/probiotic_prebiotic.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/promotion_terms.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/protein_animal.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/protein_vegan.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/regional_labels.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/salt_synonyms.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/seasonal_labels.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/sesame_synonyms.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/shellfish_synonyms.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/soil_health.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/soy_synonyms.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/soybean_derivatives.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/sulphite_markers.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/superfood_markers.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/sustainability_labels.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/vitamin_markers.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/volume_synonyms.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./master_ontology_2026/weight_synonyms.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/animal_products.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/animal_welfare.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/antioxidant_markers.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/artificial_sweeteners.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/bee_friendly.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/bio_labels.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/brain_health_terms.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/brand_quality_tiers.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/bundle_terms.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/caffeine.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/child_friendly_markers.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/coeliac_triggers.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/diabetic_markers.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/eco_packaging.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/egg_synonyms.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/fairtrade_labels.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/fatty_acid_markers.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/fermented_food_terms.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/fiber_markers.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/fish_synonyms.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/gluten_free_labels.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/heart_health_terms.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/herbal_extracts.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/high_protein_markers.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/histamine_triggers.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/immune_support_terms.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/keto_markers.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/lactose_free_labels.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/low_fat_markers.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/low_sugar_markers.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/meat.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/mineral_markers.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/mustard_synonyms.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/nut_synonyms.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/organic_variants.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/paleo_markers.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/palm_oil.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/preservative_terms.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/price_unit_aliases.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/probiotic_prebiotic.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/promotion_terms.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/protein_animal.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/protein_vegan.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/regional_labels.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/salt_synonyms.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/seasonal_labels.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/sesame_synonyms.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/shellfish_synonyms.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/soil_health.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/soy_synonyms.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/soybean_derivatives.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/sulphite_markers.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/superfood_markers.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/sustainability_labels.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/vitamin_markers.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/volume_synonyms.csv
+-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./ontology/weight_synonyms.csv
+-f63e0ec87c35c396378f2e1bed33e0a36d95841537897a3aeafa4b0fdb32bced  ./master_ontology_2026/alcohol.csv
+-f63e0ec87c35c396378f2e1bed33e0a36d95841537897a3aeafa4b0fdb32bced  ./ontology/alcohol.csv
+diff --git a/data/ontology.zip b/data/ontology.zip
+deleted file mode 100644
+index 662a7a4677ef70afeadd70f836d95bdbed5382c7..0000000000000000000000000000000000000000
+GIT binary patch
+literal 0
+HcmV?d00001
+
+literal 17433
+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
+
+diff --git a/data/ontology/animal_products.csv b/data/ontology/animal_products.csv
+index af6dc8e..175173f 100644
+--- a/data/ontology/animal_products.csv
++++ b/data/ontology/animal_products.csv
+@@ -1,11 +1,12 @@
+-term,en,de,fr,it
+-meat,meat; animal meat; flesh,Fleisch; Tierfleisch,viande; chair animale,carne; carne animale
+-milk,milk; dairy; dairy products; cow milk,Milch; Molkerei; Milchprodukte; Kuhmilch,lait; produits laitiers; lait de vache,latte; latticini; prodotti caseari; latte vaccino
+-eggs,eggs; egg; egg powder; egg white; egg yolk,Eier; Ei; Eipulver; Eiweiß; Eigelb,œufs; œuf; poudre d'œuf,uova; uovo; uovo in polvere
+-fish,fish; seafood; marine products,Fisch; Meeresfrüchte; Meeresprodukte,poisson; fruits de mer; produits marins,pesce; frutti di mare; prodotti marini
+-honey,honey; beeswax; bee products; royal jelly,Honig; Bienenwachs; Bienenprodukte; Gelee Royale,miel; cire d'abeille; produits de la ruche; gelée royale,miele; cera d'api; prodotti dell'alveare; pappa reale
+-gelatine,gelatine; gelatin; animal gelatine; pork gelatine,Gelatine; Tiergelatine; Schweinegelatine,gélatine; gélatine animale; gélatine porcine,gelatina; gelatina animale; gelatina suina
+-collagen,collagen; collagen peptides; hydrolysed collagen,Kollagen; Kollagenpeptide; hydrolysiertes Kollagen,collagène; peptides de collagène; collagène hydrolysé,collagene; peptidi di collagene; collagene idrolizzato
+-whey,whey; whey protein; lactoserum,Molke; Molkenprotein,lactosérum; protéine de lactosérum,siero; proteina del siero di latte
+-casein,casein; caseinate; milk protein,Kasein; Kaseinat; Milchprotein,caséine; caséinate; protéine de lait,caseina; caseinato; proteina del latte
+-lard,lard; animal fat; pork fat; beef tallow,Schmalz; Schweinefett; Rinderfett; tierisches Fett,saindoux; graisse animale; graisse de porc; suif de bœuf,strutto; grasso animale; grasso di maiale; sego di manzo
++term,en,de,fr,it
++meat,meat; animal meat; flesh,Fleisch; Tierfleisch,viande; chair animale,carne; carne animale
++milk,milk; dairy; dairy products; cow milk,Milch; Molkerei; Milchprodukte; Kuhmilch,lait; produits laitiers; lait de vache,latte; latticini; prodotti caseari; latte vaccino
++eggs,eggs; egg; egg powder; egg white; egg yolk,Eier; Ei; Eipulver; Eiweiß; Eigelb,œufs; œuf; poudre d'œuf,uova; uovo; uovo in polvere
++fish,fish; seafood; marine products,Fisch; Meeresfrüchte; Meeresprodukte,poisson; fruits de mer; produits marins,pesce; frutti di mare; prodotti marini
++honey,honey; beeswax; bee products; royal jelly,Honig; Bienenwachs; Bienenprodukte; Gelee Royale,miel; cire d'abeille; produits de la ruche; gelée royale,miele; cera d'api; prodotti dell'alveare; pappa reale
++gelatine,gelatine; gelatin; animal gelatine; pork gelatine,Gelatine; Tiergelatine; Schweinegelatine,gélatine; gélatine animale; gélatine porcine,gelatina; gelatina animale; gelatina suina
++collagen,collagen; collagen peptides; hydrolysed collagen,Kollagen; Kollagenpeptide; hydrolysiertes Kollagen,collagène; peptides de collagène; collagène hydrolysé,collagene; peptidi di collagene; collagene idrolizzato
++whey,whey; whey protein; lactoserum,Molke; Molkenprotein,lactosérum; protéine de lactosérum,siero; proteina del siero di latte
++casein,casein; caseinate; milk protein,Kasein; Kaseinat; Milchprotein,caséine; caséinate; protéine de lait,caseina; caseinato; proteina del latte
++lard,lard; animal fat; pork fat; beef tallow,Schmalz; Schweinefett; Rinderfett; tierisches Fett,saindoux; graisse animale; graisse de porc; suif de bœuf,strutto; grasso animale; grasso di maiale; sego di manzo
++dairy_products,butter; cream; cheese; ghee; lactose; buttermilk; skimmed milk; whole milk; milk powder; yoghurt; yogurt,Butter; Butterreinfett; Sahne; Rahm; Käse; Laktose; Buttermilch; Magermilch; Vollmilch; Milchpulver; Joghurt,beurre; crème fraîche; crème entière; crème liquide; crème de lait; fromage; lactose; babeurre; lait écrémé; lait entier; poudre de lait; yaourt,burro; panna; formaggio; lattosio; latticello; latte scremato; latte intero; latte in polvere; yogurt
+diff --git a/data/ontology/palm_oil.csv b/data/ontology/palm_oil.csv
+index 742306f..8658e9a 100644
+--- a/data/ontology/palm_oil.csv
++++ b/data/ontology/palm_oil.csv
+@@ -1,7 +1,7 @@
+-term,en,de,fr,it
+-palm_oil,palm oil; palm fat,Palmöl; Palmfett,huile de palme; graisse de palme,olio di palma; grasso di palma
+-palm_kernel,palm kernel oil; palm kernel fat,Palmkernöl; Palmkernfett,huile de palmiste; graisse de palmiste,olio di palmisto; grasso di palmisto
+-rspo,RSPO; sustainable palm oil; certified palm oil,RSPO; nachhaltiges Palmöl; zertifiziertes Palmöl,RSPO; huile de palme durable; huile de palme certifiée,RSPO; olio di palma sostenibile; olio di palma certificato
+-palm_free,palm oil free; no palm oil; without palm oil,palmölfrei; ohne Palmöl; kein Palmöl,sans huile de palme; zéro huile de palme,senza olio di palma
+-vegetable_fat,vegetable fat; vegetable oil blend,Pflanzenfett; Pflanzenfettmischung,graisse végétale; mélange d'huiles végétales,grasso vegetale; miscela di oli vegetali
+-hydrogenated,hydrogenated palm oil; partially hydrogenated,hydriertes Palmöl; teilweise hydriert,huile de palme hydrogénée; partiellement hydrogénée,olio di palma idrogenato; parzialmente idrogenato
++term,en,de,fr,it
++palm_oil,palm oil; palm fat,Palmöl; Palmfett,huile de palme; graisse de palme; palme,olio di palma; grasso di palma
++palm_kernel,palm kernel oil; palm kernel fat,Palmkernöl; Palmkernfett,huile de palmiste; graisse de palmiste; palmiste,olio di palmisto; grasso di palmisto
++rspo,RSPO; sustainable palm oil; certified palm oil,RSPO; nachhaltiges Palmöl; zertifiziertes Palmöl,RSPO; huile de palme durable; huile de palme certifiée,RSPO; olio di palma sostenibile; olio di palma certificato
++palm_free,palm oil free; no palm oil; without palm oil,palmölfrei; ohne Palmöl; kein Palmöl,sans huile de palme; zéro huile de palme,senza olio di palma
++vegetable_fat,vegetable fat; vegetable oil blend,Pflanzenfett; Pflanzenfettmischung,graisse végétale; mélange d'huiles végétales,grasso vegetale; miscela di oli vegetali
++hydrogenated,hydrogenated palm oil; partially hydrogenated,hydriertes Palmöl; teilweise hydriert,huile de palme hydrogénée; partiellement hydrogénée,olio di palma idrogenato; parzialmente idrogenato
+diff --git a/debug_migros_raw.py b/debug_migros_raw.py
+deleted file mode 100644
+index d3709df..0000000
+--- a/debug_migros_raw.py
++++ /dev/null
+@@ -1,54 +0,0 @@
+-# ============================================================
+-# WISEMARKET - DEBUG: dump raw Migros API response
+-# ============================================================
+-import asyncio
+-import json
+-from playwright.async_api import async_playwright
+-
+-SEARCH_TERM = "rindsburger"
+-
+-
+-async def main():
+-    results = []
+-
+-    async def handle_response(response):
+-        if 'product-display/public/v4/product-cards' in response.url and response.status == 200:
+-            try:
+-                data = await response.json()
+-                if isinstance(data, list):
+-                    results.extend(data)
+-            except Exception:
+-                pass
+-
+-    async with async_playwright() as p:
+-        browser = await p.chromium.launch(headless=True)
+-        context = await browser.new_context(
+-            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+-            locale="de-CH",
+-        )
+-        page = await context.new_page()
+-        page.on('response', handle_response)
+-
+-        await page.goto(f"https://www.migros.ch/de/search?query={SEARCH_TERM}", timeout=20000, wait_until="networkidle")
+-        await page.wait_for_timeout(2000)
+-
+-        await browser.close()
+-
+-    print(f"Got {len(results)} raw product entries.\n")
+-
+-    for i, item in enumerate(results[:2]):
+-        print(f"===== RAW PRODUCT {i+1} =====")
+-        print(json.dumps(item, indent=2, ensure_ascii=False))
+-        print()
+-
+-    print("===== 'offer' section for all results =====")
+-    for i, item in enumerate(results):
+-        title = item.get("title") or item.get("name") or "?"
+-        offer = item.get("offer") or {}
+-        print(f"[{i}] {title}")
+-        print(json.dumps(offer, indent=2, ensure_ascii=False))
+-        print()
+-
+-
+-if __name__ == "__main__":
+-    asyncio.run(main())
+\ No newline at end of file
+diff --git a/Steps done.md b/docs/BUILD_LOG.md
+similarity index 99%
+rename from Steps done.md
+rename to docs/BUILD_LOG.md
+index debc19b..8bb76de 100644
+--- a/Steps done.md	
++++ b/docs/BUILD_LOG.md
+@@ -925,7 +925,7 @@ The system can:
+ # What is next — remaining steps
+ 
+ 1. **Agent endpoint** — `POST /agent/query`
+-   Connect chat/voice/search to Claude API. Natural language → DB query → LLM refiner → smart answer.
++   Connect chat/voice/search to an LLM (Groq via LiteLLM). Natural language → DB query → LLM refiner → smart answer.
+ 
+ 2. **Scraper pipeline**
+    Python scraper agents for Migros, Coop, Aldi writing into `etl.staging_products` → validation → promote to `products`.
+diff --git a/frontend/wisemarket/src/pages/Home.jsx b/frontend/wisemarket/src/pages/Home.jsx
+index c3c5ca3..a0d0360 100644
+--- a/frontend/wisemarket/src/pages/Home.jsx
++++ b/frontend/wisemarket/src/pages/Home.jsx
+@@ -155,7 +155,9 @@ export default function Home() {
+             onFocus={() => setFocused(true)}
+             onBlur={() => setFocused(false)}
+             onKeyDown={e => {
+-              if (e.key === 'Enter' && isGtin) navigate(`/product/${query.trim()}`)
++              if (e.key !== 'Enter') return
++              if (isGtin) navigate(`/product/${query.trim()}`)
++              else e.target.blur()  // close the mobile keyboard
+             }}
+             placeholder={{
+               en: 'Search products...', de: 'Produkte suchen...',
+diff --git a/patch_app_recipe_route.py b/patch_app_recipe_route.py
+deleted file mode 100644
+index 2fe9ddf..0000000
+--- a/patch_app_recipe_route.py
++++ /dev/null
+@@ -1,32 +0,0 @@
+-PATH = "frontend/wisemarket/src/App.jsx"
+-
+-
+-def replace_exact(content, before, after, label):
+-    if before not in content:
+-        print("  SKIP/WARN [" + label + "]: expected text not found.")
+-        return content, False
+-    if content.count(before) > 1:
+-        print("  WARN [" + label + "]: text appears more than once - manual check needed.")
+-        return content, False
+-    print("  OK [" + label + "]")
+-    return content.replace(before, after, 1), True
+-
+-
+-with open(PATH, "r", encoding="utf-8") as f:
+-    content = f.read()
+-
+-before_import = "import Settings    from './pages/Settings'"
+-after_import = "import Settings    from './pages/Settings'\nimport RecipeView  from './pages/RecipeView'"
+-content, ok1 = replace_exact(content, before_import, after_import, "add RecipeView import")
+-
+-before_route = '''        <Route path="/settings"   element={onboarded ? <Settings /> : <Navigate to="/onboarding" replace />} />'''
+-after_route = '''        <Route path="/settings"   element={onboarded ? <Settings /> : <Navigate to="/onboarding" replace />} />
+-        <Route path="/recipe/:recipeId" element={<RecipeView />} />'''
+-content, ok2 = replace_exact(content, before_route, after_route, "add /recipe/:recipeId route")
+-
+-if ok1 and ok2:
+-    with open(PATH, "w", encoding="utf-8") as f:
+-        f.write(content)
+-    print("\\nBoth changes applied. File saved.")
+-else:
+-    print("\\nOne or more changes NOT applied (see SKIP/WARN above). File NOT saved.")
+\ No newline at end of file
+diff --git a/patch_decision_engine_evidence.py b/patch_decision_engine_evidence.py
+deleted file mode 100644
+index 0228f7e..0000000
+--- a/patch_decision_engine_evidence.py
++++ /dev/null
+@@ -1,83 +0,0 @@
+-PATH = "backend/api/routes/products.py"
+-
+-
+-def replace_exact(content, before, after, label):
+-    if before not in content:
+-        print(f"  SKIP/WARN [{label}]: expected text not found.")
+-        return content, False
+-    if content.count(before) > 1:
+-        print(f"  WARN [{label}]: text appears more than once - manual check needed.")
+-        return content, False
+-    print(f"  OK [{label}]")
+-    return content.replace(before, after, 1), True
+-
+-
+-with open(PATH, "r", encoding="utf-8") as f:
+-    content = f.read()
+-
+-before_block = '''            computed_tags = None
+-            try:
+-                raw_ing = u.get("canonical_ingredients_raw")
+-                cat = u.get("canonical_category") or "other"
+-                if raw_ing:
+-                    parsed_ingredients = request.app.state.parser.normalize(raw_ing)
+-                    groups = request.app.state.router.route(cat)
+-                    matches = request.app.state.matcher.match(parsed_ingredients, groups)
+-                    computed_tags = request.app.state.decision_engine.evaluate(matches, lang=lang)
+-            except Exception:
+-                computed_tags = None
+-
+-            unified = {'''
+-
+-after_block = '''            computed_tags = None
+-            try:
+-                raw_ing = u.get("canonical_ingredients_raw")
+-                cat = u.get("canonical_category") or "other"
+-                if raw_ing:
+-                    parsed_ingredients = request.app.state.parser.normalize(raw_ing)
+-                    groups = request.app.state.router.route(cat)
+-                    matches = request.app.state.matcher.match(parsed_ingredients, groups)
+-
+-                    try:
+-                        off_resp = (
+-                            supabase.table("products")
+-                            .select("ontology_tags")
+-                            .eq("gtin", gtin)
+-                            .eq("store", "open_food_facts")
+-                            .limit(1)
+-                            .execute()
+-                        )
+-                        off_tags = (off_resp.data[0].get("ontology_tags") or {}) if off_resp.data else {}
+-                    except Exception:
+-                        off_tags = {}
+-
+-                    if off_tags.get("vegan") is True:
+-                        matches.setdefault("vegan_markers", [])
+-                        if "off:verified" not in matches["vegan_markers"]:
+-                            matches["vegan_markers"].append("off:verified")
+-
+-                    if off_tags.get("gluten_free") is True:
+-                        if not matches.get("coeliac_triggers"):
+-                            matches.setdefault("gluten_free_labels", [])
+-                            if "off:verified" not in matches["gluten_free_labels"]:
+-                                matches["gluten_free_labels"].append("off:verified")
+-
+-                    if off_tags.get("lactose_free") is True:
+-                        matches.setdefault("lactose_free_labels", [])
+-                        if "off:verified" not in matches["lactose_free_labels"]:
+-                            matches["lactose_free_labels"].append("off:verified")
+-
+-                    computed_tags = request.app.state.decision_engine.evaluate(matches, lang=lang)
+-            except Exception:
+-                computed_tags = None
+-
+-            unified = {'''
+-
+-content, ok = replace_exact(content, before_block, after_block, "inject verified OFF facts into matches")
+-
+-if ok:
+-    with open(PATH, "w", encoding="utf-8") as f:
+-        f.write(content)
+-    print("\nChange applied. File saved.")
+-else:
+-    print("\nChange NOT applied (see SKIP/WARN above). File NOT saved.")
+\ No newline at end of file
+diff --git a/patch_dinners_id_fix.py b/patch_dinners_id_fix.py
+deleted file mode 100644
+index e6ad873..0000000
+--- a/patch_dinners_id_fix.py
++++ /dev/null
+@@ -1,50 +0,0 @@
+-PATH = "frontend/wisemarket/src/pages/Home.jsx"
+-
+-
+-def replace_exact(content, before, after, label):
+-    if before not in content:
+-        print("  SKIP/WARN [" + label + "]: expected text not found.")
+-        return content, False
+-    if content.count(before) > 1:
+-        print("  WARN [" + label + "]: text appears more than once - manual check needed.")
+-        return content, False
+-    print("  OK [" + label + "]")
+-    return content.replace(before, after, 1), True
+-
+-
+-with open(PATH, "r", encoding="utf-8") as f:
+-    content = f.read()
+-
+-before_dinners = """const DINNERS = [
+-  { icon:'\U0001f414', name:'Roast Chicken',    search:'poulet kartoffeln kr\u00e4uter' },
+-  { icon:'\U0001f35d', name:'Pasta Bolognese',  search:'hackfleisch pasta tomaten' },
+-  { icon:'\U0001f957', name:'Light Salad',      search:'salat lachs avocado' },
+-  { icon:'\U0001f41f', name:'Salmon & Veg',     search:'lachs gem\u00fcse zitrone' },
+-  { icon:'\U0001f9c0', name:'Raclette Evening', search:'raclettek\u00e4se kartoffeln cornichons' },
+-  { icon:'\U0001f372', name:'Fondue Night',     search:'fonduek\u00e4se brot weisswein' },
+-  { icon:'\U0001f355', name:'Pizza Night',      search:'mozzarella tomaten pizza teig' },
+-]"""
+-
+-after_dinners = """const DINNERS = [
+-  { id:'roast_chicken',    icon:'\U0001f414', name:'Roast Chicken',    search:'poulet kartoffeln kr\u00e4uter' },
+-  { id:'pasta_bolognese',  icon:'\U0001f35d', name:'Pasta Bolognese',  search:'hackfleisch pasta tomaten' },
+-  { id:'light_salad',      icon:'\U0001f957', name:'Light Salad',      search:'salat lachs avocado' },
+-  { id:'salmon_and_veg',   icon:'\U0001f41f', name:'Salmon & Veg',     search:'lachs gem\u00fcse zitrone' },
+-  { id:'raclette_evening', icon:'\U0001f9c0', name:'Raclette Evening', search:'raclettek\u00e4se kartoffeln cornichons' },
+-  { id:'fondue_night',     icon:'\U0001f372', name:'Fondue Night',     search:'fonduek\u00e4se brot weisswein' },
+-  { id:'pizza_night',      icon:'\U0001f355', name:'Pizza Night',      search:'mozzarella tomaten pizza teig' },
+-]"""
+-
+-content, ok1 = replace_exact(content, before_dinners, after_dinners, "add explicit id to each DINNERS entry")
+-
+-before_nav = "onClick={() => navigate(`/recipe/${dinner.name.toLowerCase().replace(/\\s+/g, '_')}`)}>"
+-after_nav = "onClick={() => navigate(`/recipe/${dinner.id}`)}>"
+-
+-content, ok2 = replace_exact(content, before_nav, after_nav, "use dinner.id directly for navigation")
+-
+-if ok1 and ok2:
+-    with open(PATH, "w", encoding="utf-8") as f:
+-        f.write(content)
+-    print("\nBoth changes applied. File saved.")
+-else:
+-    print("\nOne or more changes NOT applied (see SKIP/WARN above). File NOT saved.")
+\ No newline at end of file
+diff --git a/patch_enter_key_fix.py b/patch_enter_key_fix.py
+deleted file mode 100644
+index 5a458fd..0000000
+--- a/patch_enter_key_fix.py
++++ /dev/null
+@@ -1,39 +0,0 @@
+-PATH = "frontend/wisemarket/src/pages/Home.jsx"
+-
+-
+-def replace_exact(content, before, after, label):
+-    if before not in content:
+-        print(f"  SKIP/WARN [{label}]: expected text not found.")
+-        return content, False
+-    if content.count(before) > 1:
+-        print(f"  WARN [{label}]: text appears more than once - manual check needed.")
+-        return content, False
+-    print(f"  OK [{label}]")
+-    return content.replace(before, after, 1), True
+-
+-
+-with open(PATH, "r", encoding="utf-8") as f:
+-    content = f.read()
+-
+-before = '''            onKeyDown={e => {
+-              if (e.key === 'Enter' && isGtin) navigate(`/product/${query.trim()}`)
+-            }}'''
+-
+-after = '''            onKeyDown={e => {
+-              if (e.key === 'Enter') {
+-                if (isGtin) {
+-                  navigate(`/product/${query.trim()}`)
+-                } else {
+-                  e.target.blur()
+-                }
+-              }
+-            }}'''
+-
+-content, ok = replace_exact(content, before, after, "Enter key blurs input for non-GTIN search")
+-
+-if ok:
+-    with open(PATH, "w", encoding="utf-8") as f:
+-        f.write(content)
+-    print("\nChange applied. File saved.")
+-else:
+-    print("\nChange NOT applied (see SKIP/WARN above). File NOT saved.")
+\ No newline at end of file
+diff --git a/patch_home_dinner_click.py b/patch_home_dinner_click.py
+deleted file mode 100644
+index 82d9be6..0000000
+--- a/patch_home_dinner_click.py
++++ /dev/null
+@@ -1,45 +0,0 @@
+-PATH = "frontend/wisemarket/src/pages/Home.jsx"
+-
+-
+-def replace_exact(content, before, after, label):
+-    if before not in content:
+-        print("  SKIP/WARN [" + label + "]: expected text not found.")
+-        return content, False
+-    if content.count(before) > 1:
+-        print("  WARN [" + label + "]: text appears more than once - manual check needed.")
+-        return content, False
+-    print("  OK [" + label + "]")
+-    return content.replace(before, after, 1), True
+-
+-
+-with open(PATH, "r", encoding="utf-8") as f:
+-    content = f.read()
+-
+-before = """            <div className="card" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }}
+-              onClick={() => { setQuery(dinner.search); inputRef.current?.focus() }}>
+-              <span style={{ fontSize: 36 }}>{dinner.icon}</span>
+-              <div style={{ flex: 1 }}>
+-                <p style={{ margin: 0, fontWeight: 600, fontSize: 15 }}>{dinner.name}</p>
+-                <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--muted)' }}>
+-                  Tap to find ingredients \u2192
+-                </p>
+-              </div>"""
+-
+-after = """            <div className="card" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }}
+-              onClick={() => navigate(`/recipe/${dinner.name.toLowerCase().replace(/\\s+/g, '_')}`)}>
+-              <span style={{ fontSize: 36 }}>{dinner.icon}</span>
+-              <div style={{ flex: 1 }}>
+-                <p style={{ margin: 0, fontWeight: 600, fontSize: 15 }}>{dinner.name}</p>
+-                <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--muted)' }}>
+-                  Tap for the full recipe \u2192
+-                </p>
+-              </div>"""
+-
+-content, ok = replace_exact(content, before, after, "navigate to RecipeView instead of just searching")
+-
+-if ok:
+-    with open(PATH, "w", encoding="utf-8") as f:
+-        f.write(content)
+-    print("\nChange applied. File saved.")
+-else:
+-    print("\nChange NOT applied (see SKIP/WARN above). File NOT saved.")
+\ No newline at end of file
+diff --git a/patch_multiword_search.py b/patch_multiword_search.py
+deleted file mode 100644
+index 047748e..0000000
+--- a/patch_multiword_search.py
++++ /dev/null
+@@ -1,54 +0,0 @@
+-# ============================================================
+-# WISEMARKET - PATCH: fix multi-word search
+-#
+-# Before: "hackfleisch pasta tomaten" was matched as one literal
+-# phrase against the product name - never matches anything real.
+-#
+-# After: splits the query into individual words and matches
+-# products whose name contains ANY of them (OR), which is what
+-# users actually expect from a multi-word search (e.g. searching
+-# ingredients for a recipe).
+-# ============================================================
+-
+-PATH = "backend/api/routes/products.py"
+-
+-
+-def replace_exact(content, before, after, label):
+-    if before not in content:
+-        print(f"  SKIP/WARN [{label}]: expected text not found.")
+-        return content, False
+-    if content.count(before) > 1:
+-        print(f"  WARN [{label}]: text appears more than once - manual check needed.")
+-        return content, False
+-    print(f"  OK [{label}]")
+-    return content.replace(before, after, 1), True
+-
+-
+-with open(PATH, "r", encoding="utf-8") as f:
+-    content = f.read()
+-
+-before = '''    if q:
+-        name_col = f"name_{lang}" if lang in ("en", "de", "fr", "it") else "name_en"
+-        query = query.ilike(name_col, f"%{q}%")'''
+-
+-after = '''    if q:
+-        name_col = f"name_{lang}" if lang in ("en", "de", "fr", "it") else "name_en"
+-        words = [w for w in q.strip().split() if w]
+-        if len(words) <= 1:
+-            # single word - simple substring match, unchanged behavior
+-            query = query.ilike(name_col, f"%{q}%")
+-        else:
+-            # multi-word query - match products whose name contains
+-            # ANY of the individual words (e.g. recipe-ingredient style
+-            # searches like "hackfleisch pasta tomaten")
+-            or_clause = ",".join(f"{name_col}.ilike.%{w}%" for w in words)
+-            query = query.or_(or_clause)'''
+-
+-content, ok = replace_exact(content, before, after, "fix multi-word search to match ANY word")
+-
+-if ok:
+-    with open(PATH, "w", encoding="utf-8") as f:
+-        f.write(content)
+-    print("\nChange applied. File saved.")
+-else:
+-    print("\nChange NOT applied (see SKIP/WARN above). File NOT saved.")
+\ No newline at end of file
+diff --git a/patch_scraper_gluten_lactose.py b/patch_scraper_gluten_lactose.py
+deleted file mode 100644
+index 6a06200..0000000
+--- a/patch_scraper_gluten_lactose.py
++++ /dev/null
+@@ -1,82 +0,0 @@
+-# ============================================================
+-# WISEMARKET - PATCH: fix absence-based dietary claims in
+-# build_ontology_tags() (scraper_migros.py)
+-#
+-# Problem: gluten_free and lactose_free were True by DEFAULT
+-# unless specific keywords appeared in the product name/category
+-# - meaning "we didn't check" was being reported as "verified
+-# safe." These now return None (unknown) instead of a
+-# false-positive True when there's no real positive signal.
+-# ============================================================
+-
+-PATH = "backend/etl/scraper_migros.py"
+-
+-
+-def replace_exact(content, before, after, label):
+-    if before not in content:
+-        print(f"  SKIP/WARN [{label}]: expected text not found.")
+-        return content, False
+-    if content.count(before) > 1:
+-        print(f"  WARN [{label}]: text appears more than once - manual check needed.")
+-        return content, False
+-    print(f"  OK [{label}]")
+-    return content.replace(before, after, 1), True
+-
+-
+-with open(PATH, "r", encoding="utf-8") as f:
+-    content = f.read()
+-
+-before = '''    return {
+-        "halal":        halal,
+-        "vegetarian":   cat not in ["meat","fish"] and not has_pork,
+-        "vegan":        cat not in ["meat","fish","dairy"] and not has_pork,
+-        "gluten_free":  not any(x in name_lower for x in ["brot","pasta","mehl","weizen","gerste","dinkel"]),
+-        "lactose_free": cat != "dairy",
+-        "organic":      is_bio,
+-        "regional":     is_regional,
+-        "is_bio":       is_bio,
+-        "is_regional":  is_regional,
+-    }'''
+-
+-after = '''    explicit_gluten_free = any(x in name_lower for x in
+-        ["glutenfrei","gluten-frei","gluten free","sans gluten","senza glutine"])
+-    contains_gluten_words = any(x in name_lower for x in
+-        ["brot","pasta","mehl","weizen","gerste","dinkel","nudeln","kuchen","gebäck","teig"])
+-
+-    explicit_lactose_free = any(x in name_lower for x in
+-        ["laktosefrei","laktose-frei","lactose free","sans lactose","senza lattosio"])
+-
+-    if explicit_gluten_free:
+-        gluten_free_tag = True
+-    elif contains_gluten_words:
+-        gluten_free_tag = False
+-    else:
+-        gluten_free_tag = None
+-
+-    if explicit_lactose_free:
+-        lactose_free_tag = True
+-    elif cat == "dairy":
+-        lactose_free_tag = False
+-    else:
+-        lactose_free_tag = None
+-
+-    return {
+-        "halal":        halal,
+-        "vegetarian":   cat not in ["meat","fish"] and not has_pork,
+-        "vegan":        cat not in ["meat","fish","dairy"] and not has_pork,
+-        "gluten_free":  gluten_free_tag,
+-        "lactose_free": lactose_free_tag,
+-        "organic":      is_bio,
+-        "regional":     is_regional,
+-        "is_bio":       is_bio,
+-        "is_regional":  is_regional,
+-    }'''
+-
+-content, ok = replace_exact(content, before, after, "fix gluten_free/lactose_free absence-based claims")
+-
+-if ok:
+-    with open(PATH, "w", encoding="utf-8") as f:
+-        f.write(content)
+-    print("\nChange applied. File saved.")
+-else:
+-    print("\nChange NOT applied (see SKIP/WARN above). File NOT saved.")
+\ No newline at end of file
+diff --git a/patch_scraper_nonfood_meatsub.py b/patch_scraper_nonfood_meatsub.py
+deleted file mode 100644
+index f620bee..0000000
+--- a/patch_scraper_nonfood_meatsub.py
++++ /dev/null
+@@ -1,82 +0,0 @@
+-# ============================================================
+-# WISEMARKET - PATCH: Bug A (non-food items getting dietary
+-# tags) and Bug B (meat substitutes miscategorized as meat)
+-# ============================================================
+-
+-PATH = "backend/etl/scraper_migros.py"
+-
+-
+-def replace_exact(content, before, after, label):
+-    if before not in content:
+-        print(f"  SKIP/WARN [{label}]: expected text not found.")
+-        return content, False
+-    if content.count(before) > 1:
+-        print(f"  WARN [{label}]: text appears more than once - manual check needed.")
+-        return content, False
+-    print(f"  OK [{label}]")
+-    return content.replace(before, after, 1), True
+-
+-
+-with open(PATH, "r", encoding="utf-8") as f:
+-    content = f.read()
+-
+-# --- Bug B: meat-substitute override in map_category() ---
+-before_map_category = '''def map_category(breadcrumb: list) -> str:
+-    for crumb in breadcrumb:
+-        name = crumb.get("name", "")
+-        for key, cat in CATEGORY_MAP.items():
+-            if key.lower() in name.lower():
+-                return cat
+-    return "other"'''
+-
+-after_map_category = '''SUBSTITUTE_MARKERS = [
+-    "ersatz", "fleischersatz", "vegan", "vegi", "pflanzlich",
+-    "plant-based", "plant based", "veggie", "soja", "tofu", "seitan",
+-]
+-
+-
+-def map_category(breadcrumb: list) -> str:
+-    breadcrumb_text = " ".join(c.get("name", "") for c in breadcrumb).lower()
+-    matched_cat = None
+-    for crumb in breadcrumb:
+-        name = crumb.get("name", "")
+-        for key, cat in CATEGORY_MAP.items():
+-            if key.lower() in name.lower():
+-                matched_cat = cat
+-                break
+-        if matched_cat:
+-            break
+-    if matched_cat in ("meat", "fish") and any(m in breadcrumb_text for m in SUBSTITUTE_MARKERS):
+-        return "plant_protein"
+-    return matched_cat or "other"'''
+-
+-content, ok1 = replace_exact(content, before_map_category, after_map_category, "Bug B: meat-substitute override")
+-
+-# --- Bug A: no dietary tags for uncategorized ("other") products ---
+-before_gate = '''def build_ontology_tags(name: str, breadcrumb: list) -> dict:
+-    cat = map_category(breadcrumb)
+-    name_lower = name.lower()'''
+-
+-after_gate = '''def build_ontology_tags(name: str, breadcrumb: list) -> dict:
+-    cat = map_category(breadcrumb)
+-    name_lower = name.lower()
+-
+-    # Bug A fix: if the product doesn't resolve to a known food
+-    # category, don't claim any dietary/religious safety tags at
+-    # all - "uncategorized" must mean unknown, never "safe."
+-    if cat == "other":
+-        return {
+-            "halal": None, "vegetarian": None, "vegan": None,
+-            "gluten_free": None, "lactose_free": None,
+-            "organic": False, "regional": False,
+-            "is_bio": False, "is_regional": False,
+-        }'''
+-
+-content, ok2 = replace_exact(content, before_gate, after_gate, "Bug A: gate dietary tags on known food category")
+-
+-if ok1 and ok2:
+-    with open(PATH, "w", encoding="utf-8") as f:
+-        f.write(content)
+-    print("\nBoth changes applied. File saved.")
+-else:
+-    print("\nOne or more changes NOT applied (see SKIP/WARN above). File NOT saved.")
+\ No newline at end of file
+diff --git a/patch_scraper_price_fix.py b/patch_scraper_price_fix.py
+deleted file mode 100644
+index f57b3c6..0000000
+--- a/patch_scraper_price_fix.py
++++ /dev/null
+@@ -1,72 +0,0 @@
+-PATH = "backend/etl/scraper_migros.py"
+-
+-
+-def replace_exact(content, before, after, label):
+-    if before not in content:
+-        print(f"  SKIP/WARN [{label}]: expected text not found.")
+-        return content, False
+-    if content.count(before) > 1:
+-        print(f"  WARN [{label}]: text appears more than once - manual check needed.")
+-        return content, False
+-    print(f"  OK [{label}]")
+-    return content.replace(before, after, 1), True
+-
+-
+-with open(PATH, "r", encoding="utf-8") as f:
+-    content = f.read()
+-
+-before_1 = '''    offer = p.get("offer") or {}
+-    price_data = offer.get("price") or {}
+-    price = price_data.get("effectiveValue")
+-    adv_price = price_data.get("advertisedValue")
+-
+-    if not price:
+-        return None'''
+-
+-after_1 = '''    offer = p.get("offer") or {}
+-    price_data = offer.get("price") or {}
+-    price = price_data.get("effectiveValue")
+-    adv_price = price_data.get("advertisedValue")
+-
+-    if not price:
+-        return None
+-
+-    quantity_raw = offer.get("quantity")
+-    unit_price_data = price_data.get("unitPrice") or {}
+-    price_per_100g = unit_price_data.get("value")
+-    unit_price_unit = unit_price_data.get("unit")'''
+-
+-content, ok1 = replace_exact(content, before_1, after_1, "capture quantity + unitPrice")
+-
+-before_2 = '''    price_row = {
+-        "gtin":               gtin,
+-        "store":              STORE,
+-        "price_chf":          round(price, 2),
+-        "original_price_chf": round(adv_price, 2) if is_promo else None,
+-        "is_promotion":       bool(is_promo),
+-        "discount_pct":       discount,
+-        "promotion_label":    "Aktion" if is_promo else None,
+-        "price_date":         TODAY,
+-    }'''
+-
+-after_2 = '''    price_row = {
+-        "gtin":               gtin,
+-        "store":              STORE,
+-        "price_chf":          round(price, 2),
+-        "original_price_chf": round(adv_price, 2) if is_promo else None,
+-        "is_promotion":       bool(is_promo),
+-        "discount_pct":       discount,
+-        "promotion_label":    "Aktion" if is_promo else None,
+-        "price_date":         TODAY,
+-        "pack_size_raw":      quantity_raw,
+-        "price_per_100g":     round(price_per_100g, 4) if price_per_100g is not None else None,
+-    }'''
+-
+-content, ok2 = replace_exact(content, before_2, after_2, "add pack_size_raw + price_per_100g to price_row")
+-
+-if ok1 and ok2:
+-    with open(PATH, "w", encoding="utf-8") as f:
+-        f.write(content)
+-    print("\nBoth changes applied. File saved.")
+-else:
+-    print("\nOne or more changes were NOT applied. File NOT saved.")
+\ No newline at end of file
+diff --git a/patch_unified_endpoint.py b/patch_unified_endpoint.py
+deleted file mode 100644
+index 3854441..0000000
+--- a/patch_unified_endpoint.py
++++ /dev/null
+@@ -1,59 +0,0 @@
+-PATH = "backend/api/routes/products.py"
+-
+-
+-def replace_exact(content, before, after, label):
+-    if before not in content:
+-        print(f"  SKIP/WARN [{label}]: expected text not found.")
+-        return content, False
+-    if content.count(before) > 1:
+-        print(f"  WARN [{label}]: text appears more than once - manual check needed.")
+-        return content, False
+-    print(f"  OK [{label}]")
+-    return content.replace(before, after, 1), True
+-
+-
+-with open(PATH, "r", encoding="utf-8") as f:
+-    content = f.read()
+-
+-before = '''    return {"gtin": gtin, "stores": results}'''
+-
+-after = '''    # Check for a GTIN-exact unified merge (Migros + third-party data)
+-    unified = None
+-    try:
+-        uni_resp = (
+-            supabase.table("unified_products")
+-            .select("unified_id, canonical_name_en, canonical_name_de, "
+-                    "canonical_brand, canonical_category, canonical_image_url, "
+-                    "canonical_ingredients_raw, canonical_nutrition, allergens, "
+-                    "field_sources")
+-            .eq("canonical_gtin", gtin)
+-            .limit(1)
+-            .execute()
+-        )
+-        if uni_resp.data:
+-            u = uni_resp.data[0]
+-            unified = {
+-                "unified_id":       u.get("unified_id"),
+-                "name_en":          u.get("canonical_name_en"),
+-                "name_de":          u.get("canonical_name_de"),
+-                "brand":            u.get("canonical_brand"),
+-                "category":         u.get("canonical_category"),
+-                "image_url":        u.get("canonical_image_url"),
+-                "ingredients_raw":  u.get("canonical_ingredients_raw"),
+-                "nutrition":        u.get("canonical_nutrition"),
+-                "allergens":        u.get("allergens"),
+-                "field_sources":    u.get("field_sources") or {},
+-            }
+-    except Exception:
+-        unified = None
+-
+-    return {"gtin": gtin, "stores": results, "unified": unified}'''
+-
+-content, ok = replace_exact(content, before, after, "add unified merge lookup to get_product")
+-
+-if ok:
+-    with open(PATH, "w", encoding="utf-8") as f:
+-        f.write(content)
+-    print("\nChange applied. File saved.")
+-else:
+-    print("\nChange NOT applied (see SKIP/WARN above). File NOT saved.")
+\ No newline at end of file
+diff --git a/patch_unified_ontology.py b/patch_unified_ontology.py
+deleted file mode 100644
+index 5badc62..0000000
+--- a/patch_unified_ontology.py
++++ /dev/null
+@@ -1,74 +0,0 @@
+-PATH = "backend/api/routes/products.py"
+-
+-
+-def replace_exact(content, before, after, label):
+-    if before not in content:
+-        print(f"  SKIP/WARN [{label}]: expected text not found.")
+-        return content, False
+-    if content.count(before) > 1:
+-        print(f"  WARN [{label}]: text appears more than once - manual check needed.")
+-        return content, False
+-    print(f"  OK [{label}]")
+-    return content.replace(before, after, 1), True
+-
+-
+-with open(PATH, "r", encoding="utf-8") as f:
+-    content = f.read()
+-
+-before_import = "from fastapi import APIRouter"
+-after_import = (
+-    "from backend.services.ingredient_parser import parse_ingredients\n"
+-    "from backend.services.ontology_router import get_relevant_groups\n"
+-    "from backend.services.ontology_matcher import match_terms\n"
+-    "from backend.services.decision_engine import evaluate_product\n"
+-    "from fastapi import APIRouter"
+-)
+-content, ok1 = replace_exact(content, before_import, after_import, "add decision engine imports")
+-
+-before_block = '''            unified = {
+-                "unified_id":       u.get("unified_id"),
+-                "name_en":          u.get("canonical_name_en"),
+-                "name_de":          u.get("canonical_name_de"),
+-                "brand":            u.get("canonical_brand"),
+-                "category":         u.get("canonical_category"),
+-                "image_url":        u.get("canonical_image_url"),
+-                "ingredients_raw":  u.get("canonical_ingredients_raw"),
+-                "nutrition":        u.get("canonical_nutrition"),
+-                "allergens":        u.get("allergens"),
+-                "field_sources":    u.get("field_sources") or {},
+-            }'''
+-
+-after_block = '''            computed_tags = None
+-            try:
+-                raw_ing = u.get("canonical_ingredients_raw")
+-                cat = u.get("canonical_category")
+-                if raw_ing:
+-                    parsed = parse_ingredients(raw_ing)
+-                    groups = get_relevant_groups(cat)
+-                    matches = match_terms(parsed, groups)
+-                    computed_tags = evaluate_product(matches, cat)
+-            except Exception:
+-                computed_tags = None
+-
+-            unified = {
+-                "unified_id":       u.get("unified_id"),
+-                "name_en":          u.get("canonical_name_en"),
+-                "name_de":          u.get("canonical_name_de"),
+-                "brand":            u.get("canonical_brand"),
+-                "category":         u.get("canonical_category"),
+-                "image_url":        u.get("canonical_image_url"),
+-                "ingredients_raw":  u.get("canonical_ingredients_raw"),
+-                "nutrition":        u.get("canonical_nutrition"),
+-                "allergens":        u.get("allergens"),
+-                "ontology_tags":    computed_tags,
+-                "field_sources":    u.get("field_sources") or {},
+-            }'''
+-
+-content, ok2 = replace_exact(content, before_block, after_block, "compute ontology_tags via decision engine")
+-
+-if ok1 and ok2:
+-    with open(PATH, "w", encoding="utf-8") as f:
+-        f.write(content)
+-    print("\nBoth changes applied. File saved.")
+-else:
+-    print("\nOne or more changes NOT applied (see SKIP/WARN above). File NOT saved.")
+\ No newline at end of file
+diff --git a/patch_unified_ontology_v2.py b/patch_unified_ontology_v2.py
+deleted file mode 100644
+index 019119c..0000000
+--- a/patch_unified_ontology_v2.py
++++ /dev/null
+@@ -1,85 +0,0 @@
+-PATH = "backend/api/routes/products.py"
+-
+-
+-def replace_exact(content, before, after, label):
+-    if before not in content:
+-        print(f"  SKIP/WARN [{label}]: expected text not found.")
+-        return content, False
+-    if content.count(before) > 1:
+-        print(f"  WARN [{label}]: text appears more than once - manual check needed.")
+-        return content, False
+-    print(f"  OK [{label}]")
+-    return content.replace(before, after, 1), True
+-
+-
+-with open(PATH, "r", encoding="utf-8") as f:
+-    content = f.read()
+-
+-bad_imports = (
+-    "from backend.services.ingredient_parser import parse_ingredients\n"
+-    "from backend.services.ontology_router import get_relevant_groups\n"
+-    "from backend.services.ontology_matcher import match_terms\n"
+-    "from backend.services.decision_engine import evaluate_product\n"
+-    "from fastapi import APIRouter"
+-)
+-if bad_imports in content:
+-    content = content.replace(bad_imports, "from fastapi import APIRouter", 1)
+-    print("  Removed previous incorrect imports.")
+-
+-before_fastapi_import = "from fastapi import APIRouter"
+-after_fastapi_import = "from fastapi import APIRouter, Request"
+-content, ok1 = replace_exact(content, before_fastapi_import, after_fastapi_import, "add Request import")
+-
+-before_sig = '''def get_product(
+-    gtin: str,
+-    store: Optional[str] = Query(None),
+-    lang: Literal["en", "de", "fr", "it"] = "en",'''
+-
+-after_sig = '''def get_product(
+-    request: Request,
+-    gtin: str,
+-    store: Optional[str] = Query(None),
+-    lang: Literal["en", "de", "fr", "it"] = "en",'''
+-
+-content, ok2 = replace_exact(content, before_sig, after_sig, "add request param to get_product")
+-
+-old_wrong_block = '''            computed_tags = None
+-            try:
+-                raw_ing = u.get("canonical_ingredients_raw")
+-                cat = u.get("canonical_category")
+-                if raw_ing:
+-                    parsed = parse_ingredients(raw_ing)
+-                    groups = get_relevant_groups(cat)
+-                    matches = match_terms(parsed, groups)
+-                    computed_tags = evaluate_product(matches, cat)
+-            except Exception:
+-                computed_tags = None
+-
+-            unified = {'''
+-
+-new_correct_block = '''            computed_tags = None
+-            try:
+-                raw_ing = u.get("canonical_ingredients_raw")
+-                cat = u.get("canonical_category") or "other"
+-                if raw_ing:
+-                    parsed_ingredients = request.app.state.parser.normalize(raw_ing)
+-                    groups = request.app.state.router.route(cat)
+-                    matches = request.app.state.matcher.match(parsed_ingredients, groups)
+-                    computed_tags = request.app.state.decision_engine.evaluate(matches, lang=lang)
+-            except Exception:
+-                computed_tags = None
+-
+-            unified = {'''
+-
+-if old_wrong_block in content:
+-    content, ok3 = replace_exact(content, old_wrong_block, new_correct_block, "fix computed_tags block (v2)")
+-else:
+-    before_unified_only = '''            unified = {'''
+-    content, ok3 = replace_exact(content, before_unified_only, new_correct_block, "insert computed_tags block (fresh)")
+-
+-if ok1 and ok2 and ok3:
+-    with open(PATH, "w", encoding="utf-8") as f:
+-        f.write(content)
+-    print("\nAll changes applied. File saved.")
+-else:
+-    print("\nOne or more changes NOT applied (see SKIP/WARN above). File NOT saved.")
+\ No newline at end of file
+diff --git a/scripts/check_connection.py b/scripts/check_connection.py
+new file mode 100644
+index 0000000..4a2e306
+--- /dev/null
++++ b/scripts/check_connection.py
+@@ -0,0 +1,24 @@
++# ============================================================
++# WISEMARKET — CHECK SUPABASE CONNECTION
++# Usage (from the repo root):  python scripts/check_connection.py
++# ============================================================
++import sys
++from pathlib import Path
++
++sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
++
++from dotenv import load_dotenv  # noqa: E402
++from backend.config.settings import ENV_FILE  # noqa: E402
++from backend.api.db import get_supabase_client  # noqa: E402
++
++load_dotenv(dotenv_path=ENV_FILE)
++print(f"Checking .env at: {ENV_FILE}")
++print(f"File exists: {ENV_FILE.exists()}")
++
++try:
++    client = get_supabase_client()
++    resp = client.table("products").select("gtin").limit(1).execute()
++    print(f"SUCCESS: connected to Supabase ({len(resp.data)} row read from products)")
++except Exception as e:
++    print(f"FAILED: {e}")
++    sys.exit(1)
+diff --git a/scripts/recompute_tags.py b/scripts/recompute_tags.py
+new file mode 100644
+index 0000000..df58b74
+--- /dev/null
++++ b/scripts/recompute_tags.py
+@@ -0,0 +1,83 @@
++# ============================================================
++# WISEMARKET — RECOMPUTE STORED PRODUCT TAGS (one-time backfill)
++# ============================================================
++# Re-runs the ingredient analysis for every product that has an
++# ingredient list and updates its `ontology_tags` (used by the search
++# filters), so stored tags match /analyze/{gtin}.
++#
++# Usage (from the repo root):
++#   python scripts/recompute_tags.py            # preview only, changes nothing
++#   python scripts/recompute_tags.py --apply    # write the new tags
++#   python scripts/recompute_tags.py --store open_food_facts --apply
++# ============================================================
++import argparse
++import collections
++import sys
++from pathlib import Path
++
++sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
++
++from dotenv import load_dotenv  # noqa: E402
++from backend.config.settings import ENV_FILE  # noqa: E402
++from backend.api.db import get_supabase_client  # noqa: E402
++from backend.services.product_tags import tags_from_ingredients  # noqa: E402
++
++load_dotenv(dotenv_path=ENV_FILE)
++
++PAGE = 500
++KEYS = ("vegan", "vegetarian", "halal", "gluten_free", "lactose_free", "palm_oil")
++
++
++def main() -> None:
++    ap = argparse.ArgumentParser(description=__doc__)
++    ap.add_argument("--apply", action="store_true", help="write changes (default: preview only)")
++    ap.add_argument("--store", help="only this store, e.g. open_food_facts")
++    args = ap.parse_args()
++
++    sb = get_supabase_client()
++    changes = collections.Counter()
++    examples = collections.defaultdict(list)
++    scanned = updated = 0
++    offset = 0
++
++    while True:
++        q = (sb.table("products")
++               .select("id, gtin, store, name_en, category, ingredients_raw, ontology_tags")
++               .not_.is_("ingredients_raw", "null")
++               .order("id")
++               .range(offset, offset + PAGE - 1))
++        if args.store:
++            q = q.eq("store", args.store)
++        rows = q.execute().data
++        if not rows:
++            break
++        offset += PAGE
++
++        for row in rows:
++            scanned += 1
++            new = tags_from_ingredients(row.get("ingredients_raw") or "", row.get("category"))
++            if not new:
++                continue
++            old = row.get("ontology_tags") or {}
++            diff = {k: new[k] for k in KEYS if old.get(k) != new[k]}
++            if not diff:
++                continue
++            for k, v in diff.items():
++                change = f"{k}: {old.get(k)} -> {v}"
++                changes[change] += 1
++                if len(examples[change]) < 3:
++                    examples[change].append(f"{row['gtin']} {(row.get('name_en') or '')[:35]}")
++            if args.apply:
++                sb.table("products").update({"ontology_tags": {**old, **new}}).eq("id", row["id"]).execute()
++            updated += 1
++
++    mode = "UPDATED" if args.apply else "WOULD UPDATE (preview)"
++    print(f"Scanned {scanned} products with ingredients — {mode}: {updated}")
++    for change, n in changes.most_common():
++        print(f"  {n:6}  {change:28}  e.g. " + "; ".join(examples[change]))
++    if not args.apply and updated:
++        print("\nRun again with --apply to write these changes.")
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/test_connection.py b/test_connection.py
+deleted file mode 100644
+index 3192cc2..0000000
+--- a/test_connection.py
++++ /dev/null
+@@ -1,19 +0,0 @@
+-import os
+-from pathlib import Path
+-from dotenv import load_dotenv
+-from backend.config.settings import ENV_FILE
+-from backend.api.db import get_supabase_client
+-
+-# Load .env from the repo root (env-driven, portable)
+-env_path = ENV_FILE
+-load_dotenv(dotenv_path=env_path)
+-
+-print(f"Checking .env at: {env_path}")
+-print(f"File exists: {env_path.exists()}")
+-
+-try:
+-    client = get_supabase_client()
+-    print("SUCCESS: The keys were found and client is created!")
+-    print(f"Client type: {type(client).__name__}")
+-except Exception as e:
+-    print(f"FAILED: {e}")
+diff --git a/tests/test_food_analysis.py b/tests/test_food_analysis.py
+new file mode 100644
+index 0000000..b591615
+--- /dev/null
++++ b/tests/test_food_analysis.py
+@@ -0,0 +1,189 @@
++# ============================================================
++# WISEMARKET — FOOD ANALYSIS ACCURACY TESTS
++# Full pipeline: IngredientParser -> OntologyRouter -> OntologyMatcher
++# -> DecisionEngine, on REAL ingredient lists from Open Food Facts
++# (data/open_food_facts/swiss_products_p1.json) plus a few Swiss-German
++# label patterns. Expected values were checked by hand against the label.
++# No database needed.
++# ============================================================
++import pytest
++
++from backend.normalizer.ontology_loader import load_ontology
++from backend.services.decision_engine import DecisionEngine
++from backend.services.ingredient_parser import IngredientParser
++from backend.services.ontology_matcher import OntologyMatcher
++from backend.services.ontology_router import OntologyRouter
++
++PARSER = IngredientParser()
++ROUTER = OntologyRouter()
++MATCHER = OntologyMatcher(load_ontology())
++ENGINE = DecisionEngine()
++
++
++def analyse(ingredients: str, category: str = "other") -> dict:
++    parsed = PARSER.normalize(ingredients)
++    matches = MATCHER.match(parsed, ROUTER.route(category))
++    return ENGINE.evaluate(matches)
++
++
++def not_vegan(v):
++    return not v["vegan"] and not v["vegan_likely"]
++
++
++# ── Real products (Open Food Facts) ───────────────────────────
++
++NUTELLA = ("Sucre, huile de palme, NOISETTES 13%, cacao maigre 7,4%, LAIT écrémé en poudre 6,6%, "
++           "LACTOSERUM en poudre, émulsifiants: lécithines [SOJA), vanilline. Sans gluten.")
++
++GRANOLA = ("Farine de BLÉ 36%, chocolat au LAIT 27 % [sucre, pâte de cacao, beurre de cacao, lactosérum en "
++           "poudre (de LAIT), LAIT écrémé en poudre, graisses végétales (karité, palme en proportion variable), "
++           "BEURRE concentré, émulsifiants (lécithines de SOJA, E476), lactose (de LAIT), arôme], huile de palme, "
++           "farine complète de BLE 12 %, sucre, sirop de sucre, poudres à lever (carbonates de sodium, carbonates "
++           "d'ammonium), sel, correcteur d'acidité (acide citrique). Peut contenir : fruits à coque.")
++
++DARK_CHOCOLATE = ("Sucre, pâte de cacao (Afrique de l'Ouest, Amérique du Sud), beurre de cacao, émulsifiant "
++                  "(lécithine), arôme naturel de vanille de Madagascar. Cacao : 53% minimum. "
++                  "Peut contenir : LAIT, FRUITS A COQUE.")
++
++SOY_YOGURT = ("_Sojabasis_ (Wasser, geschälte _Sojabohnen_ (10,4%)], Kokosmilch (4,3%) (Kokosceme, Wasser), "
++              "Zucker, Tricalciumcitrat, Säureregulatoren (Natriumcitrate, Citronensäure), Stabilisator (Pektine), "
++              "natürliches Aroma, Meersalz, Vitamine (B12, D2), Joghurtkulturen (Str,thermophilus, L, bulgaricus).")
++
++ALMOND_DRINK = ("Lait d'amandes 98% (eau 95,2%, amandes 2,8%), amidon de riz, arôme naturel d'amande, "
++                "sel marin, stabilisants (gomme guar, gomme xanthane)")
++
++BRIOCHE = ("Farine de blé 52%, sucre, beurre frais 10%, œufs entiers frais 8%, eau, crème fraîche 3%, sel, "
++           "arômes naturels (contient alcool), levure, gluten de blé, eau de vie, protéines de lait(E471), "
++           "levure désactivée, colorant (béta carotène)")
++
++CRUESLY = ("_avoine_ complète (32%), _blé_ complet (18%), sirop de glucose, huile de tournesol, sucre, "
++           "_amandes_ grillées (4,2%), _noisettes_ (4%), oligofructose, _noix de Pécan_ (1,5%), farine de _blé_, "
++           "farine de riz, _noix du Brésil_ (1%), miel, arômes naturels, antioxydant (tocophérol).")
++
++RYE_CRISPBREAD = ("Farine complète de SEIGLE (77 g*), farine de SEIGLE (28 g*), levure, sel. Peut contenir des "
++                  "traces de LUPIN, LAIT, MOUTARDE, GRAINES DE SÉSAME et SOJA. *en g pour 100 g de produit.")
++
++
++def test_nutella_contains_milk_and_palm_oil():
++    v = analyse(NUTELLA, "snacks")
++    assert not_vegan(v)
++    assert v["vegetarian"]
++    assert v["has_palm_oil"]
++    assert v["allergen_warning"]
++
++
++def test_granola_milk_chocolate_wheat_palm():
++    v = analyse(GRANOLA, "bakery")
++    assert not_vegan(v)
++    assert v["vegetarian"]
++    assert v["has_palm_oil"]
++    assert not v["is_gluten_free"]
++
++
++def test_dark_chocolate_with_milk_traces_stays_likely_vegan_but_warns():
++    v = analyse(DARK_CHOCOLATE, "snacks")
++    assert v["vegan_likely"]            # milk is only a "may contain" trace
++    assert v["allergen_warning"]        # ...but allergic users are still warned
++
++
++def test_soy_yogurt_cultures_are_not_dairy():
++    v = analyse(SOY_YOGURT, "dairy_alternative")
++    assert v["vegan_likely"]
++    assert v["vegetarian"]
++
++
++def test_almond_drink_is_plant_based():
++    v = analyse(ALMOND_DRINK, "dairy_alternative")
++    assert v["vegan_likely"]
++
++
++def test_brioche_with_alcohol_is_not_halal():
++    v = analyse(BRIOCHE, "bakery")
++    assert not v["halal"]               # "contient alcool", "eau de vie"
++    assert not_vegan(v)                 # butter, eggs, cream
++    assert v["vegetarian"]
++
++
++def test_opff_underscore_allergens_detect_wheat():
++    v = analyse(CRUESLY, "bakery")
++    assert not v["is_gluten_free"]      # _blé_ = wheat
++    assert not_vegan(v)                 # honey
++    assert v["vegetarian"]
++
++
++def test_rye_crispbread_traces_do_not_change_diet_verdicts():
++    v = analyse(RYE_CRISPBREAD, "bakery")
++    assert v["vegan_likely"]
++    assert v["vegetarian"]
++    assert not v["is_gluten_free"]
++
++
++# ── Swiss label patterns ──────────────────────────────────────
++
++@pytest.mark.parametrize("ingredients", [
++    "Zucker, Kakaobutter, Vollmilchpulver, Haselnüsse",
++    "Zucker, Butterreinfett, Weizenmehl",
++    "Zucker, Süssmolkenpulver, Kakaomasse",
++])
++def test_german_dairy_compounds_are_detected(ingredients):
++    v = analyse(ingredients, "snacks")
++    assert not_vegan(v)
++    assert v["vegetarian"]
++
++
++@pytest.mark.parametrize("ingredients", [
++    "Zucker, Kakaobutter, Kakaomasse",
++    "Wasser, Sojaeiweiß, Salz",
++    "Zucker, Milchsäure, Pektin",
++    "Lait de coco, sucre",
++    "Crème de marrons, sucre",
++])
++def test_plant_look_alikes_are_not_animal(ingredients):
++    v = analyse(ingredients)
++    assert v["vegan_likely"]
++
++
++def test_pork_gelatine_in_any_category():
++    v = analyse("Sucre, sirop de glucose, gélatine de porc", "snacks")
++    assert not v["halal"]
++    assert not v["vegetarian"]
++    assert not_vegan(v)
++
++
++def test_beef_gelatine_is_not_vegetarian():
++    v = analyse("Zucker, Glukosesirup, Rindergelatine", "snacks")
++    assert not v["vegetarian"]
++
++
++@pytest.mark.parametrize("ingredients", [
++    "Zucker, Kakaobutter, palmölfrei",
++    "Sucre, huile de tournesol, sans huile de palme",
++    "Sugar, sunflower oil, palm oil free",
++])
++def test_palm_oil_free_claims_are_not_palm_oil(ingredients):
++    assert not analyse(ingredients)["has_palm_oil"]
++
++
++def test_sugar_alcohols_and_spirit_vinegar_are_not_alcohol():
++    assert analyse("Zuckeralkohole (Maltit), Kakaobutter")["halal"]
++    assert analyse("Eau, vinaigre d'alcool, graines de moutarde, sel")["halal"]
++
++
++def test_sheep_milk_cheese_is_vegetarian_but_not_vegan():
++    v = analyse("Tomato pulp, sunflower oil, Pecorino Romano PDO cheese (sheep's milk, salt, rennet)")
++    assert v["vegetarian"]
++    assert not_vegan(v)
++
++
++def test_vegetable_butter_is_plant_based():
++    v = analyse("CACAHUETES (86%), beurre végétal (sal, cacao), sucre, sel.")
++    assert v["vegan_likely"]
++
++
++def test_palm_written_without_oil_word_is_detected():
++    v = analyse("Farine de blé, sucre, matières grasses végétales (palme, palmiste, colza), sel")
++    assert v["has_palm_oil"]
++
++
++def test_palm_sugar_is_not_palm_oil():
++    assert not analyse("Sucre de palme, noix de coco")["has_palm_oil"]
+diff --git a/tests/test_ontology_matcher.py b/tests/test_ontology_matcher.py
+index 18e3083..10af86c 100644
+--- a/tests/test_ontology_matcher.py
++++ b/tests/test_ontology_matcher.py
+@@ -46,8 +46,9 @@ def test_match_multiple_groups():
+         ["milk", "milk powder", "salt"],
+         ["allergens", "animal_products"],
+     )
++    # "milk powder" contains milk, so it is also a milk allergen
+     assert result == {
+-        "allergens": ["milk"],
++        "allergens": ["milk", "milk powder"],
+         "animal_products": ["milk powder"],
+     }
+ 
+diff --git a/tests/test_ontology_router.py b/tests/test_ontology_router.py
+index a687f07..1584f65 100644
+--- a/tests/test_ontology_router.py
++++ b/tests/test_ontology_router.py
+@@ -3,6 +3,10 @@ from backend.services.ontology_router import OntologyRouter
+ UNIVERSAL = [
+     "allergens", "animal_products", "promotion_terms",
+     "price_unit_aliases", "sugar_synonyms", "salt_synonyms",
++    # safety groups, checked for every category
++    "pork", "alcohol", "meat", "fish_synonyms", "shellfish_synonyms",
++    "palm_oil", "coeliac_triggers", "gluten_free_labels",
++    "lactose_free_labels", "vegan_markers", "vegetarian_markers",
+ ]
+ 
+ def test_empty_returns_universal():
