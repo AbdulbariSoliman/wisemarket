@@ -1,0 +1,231 @@
+diff --git a/backend/services/ingredient_parser.py b/backend/services/ingredient_parser.py
+index fda8c85..a10fe8a 100644
+--- a/backend/services/ingredient_parser.py
++++ b/backend/services/ingredient_parser.py
+@@ -6,7 +6,7 @@ from typing import List
+ # Shared by the parser (to keep the statement as one item) and the matcher
+ # (to ignore it for diet verdicts, but keep it for allergen / gluten warnings).
+ TRACE_PATTERN = re.compile(
+-    r"(peut contenir|peut aussi contenir|traces? (?:de|d'|éventuelles)|"
++    r"(peut contenir|peux contenir|peuvent contenir|peut aussi contenir|traces? (?:de|d'|éventuelles)|"
+     r"fabriqué dans un atelier|fabriqué dans une usine|"
+     r"may contain|may also contain|traces? of|"
+     r"made in a factory|produced in a factory|made in a facility|produced in a facility|"
+@@ -120,6 +120,10 @@ class IngredientParser:
+ 
+         # Open Food Facts marks allergens like _blé_ / _milk_
+         raw_text = raw_text.replace("_", " ")
++        # OCR often reads a lower-case "l" as a capital "I" ("SeeIachsfiIet")
++        raw_text = re.sub(r"(?<=[a-zäöüßéèàç])I(?=[a-zäöüßéèàç])", "l", raw_text)
++        # "œuf" and "oeuf" are the same word
++        raw_text = raw_text.replace("œ", "oe").replace("Œ", "Oe")
+ 
+         # Keep a "may contain ..." statement as ONE item, so it can be
+         # recognised as a trace warning instead of real ingredients.
+diff --git a/backend/services/ontology_matcher.py b/backend/services/ontology_matcher.py
+index aaea442..3375d6b 100644
+--- a/backend/services/ontology_matcher.py
++++ b/backend/services/ontology_matcher.py
+@@ -7,6 +7,8 @@ from backend.services.ingredient_parser import TRACE_PATTERN
+ # Phrases that contain an animal / palm word but are NOT that ingredient.
+ # They are removed from an ingredient before matching the groups below.
+ PLANT_EXCEPTIONS = [
++    # German words that contain a food word by accident ("Landwirtschaft" has "schaf")
++    "landwirtschaft", "wirtschaft",
+     # cocoa / nut / shea "butter"
+     "cocoa butter", "beurre de cacao", "kakaobutter", "burro di cacao",
+     "peanut butter", "beurre de cacahuète", "beurre de cacahuete", "erdnussbutter",
+@@ -108,8 +110,10 @@ class OntologyMatcher:
+     def __init__(self, ontology_data: Dict[str, List[dict]]) -> None:
+         self.ontology_index = self._build_index(ontology_data)
+         self.phrase_index = self._build_phrase_index(ontology_data)
+-        self._exceptions = sorted(PLANT_EXCEPTIONS, key=len, reverse=True)
+-        self._meat_exceptions = sorted(MEAT_GROUP_EXCEPTIONS, key=len, reverse=True)
++        self._exceptions = sorted({e.replace("œ", "oe") for e in PLANT_EXCEPTIONS},
++                                  key=len, reverse=True)
++        self._meat_exceptions = sorted({e.replace("œ", "oe") for e in MEAT_GROUP_EXCEPTIONS},
++                                       key=len, reverse=True)
+ 
+     # ── index building ─────────────────────────────────────────
+ 
+@@ -121,7 +125,7 @@ class OntologyMatcher:
+             if not value:
+                 continue
+             for part in str(value).split(";"):
+-                token = part.strip().lower().replace("_", " ")
++                token = part.strip().lower().replace("_", " ").replace("œ", "oe")
+                 if token:
+                     terms.add(token)
+         return terms
+@@ -155,7 +159,9 @@ class OntologyMatcher:
+             for phrase in sorted(phrases, key=len, reverse=True):
+                 if len(phrase) < 3:
+                     continue  # too short to match safely inside other text
+-                pattern = re.compile(r"(?<!\w)" + re.escape(phrase) + r"(?!\w)")
++                # simple plurals: "maquereau" also matches "maquereaux"
++                plural = r"(?:s|x|es)?" if len(phrase) >= 4 and phrase[-1].isalpha() else ""
++                pattern = re.compile(r"(?<!\w)" + re.escape(phrase) + plural + r"(?!\w)")
+                 compound = (
+                     phrase in german
+                     and len(phrase) >= GERMAN_COMPOUND_MIN_LEN
+diff --git a/backend/services/product_tags.py b/backend/services/product_tags.py
+index 2c9067c..ffb3f36 100644
+--- a/backend/services/product_tags.py
++++ b/backend/services/product_tags.py
+@@ -8,6 +8,7 @@
+ #   IngredientParser -> OntologyRouter -> OntologyMatcher -> DecisionEngine
+ # so search results and product pages always agree.
+ # ============================================================
++import re
+ from functools import lru_cache
+ from typing import Dict, Optional
+ 
+@@ -29,6 +30,31 @@ _DAIRY_WORDS = (
+ )
+ 
+ 
++# Very common ingredient-list words in the four supported languages. If an
++# ingredient list contains none of them AND no ontology term matched, it is
++# probably in another language (e.g. Croatian) and we can't judge it.
++_COMMON_WORDS = {
++    "and", "with", "sugar", "salt", "water", "flour", "oil", "milk", "wheat", "natural",
++    "und", "mit", "zucker", "salz", "wasser", "mehl", "öl", "milch", "aus", "natürliches",
++    "et", "de", "du", "des", "avec", "sucre", "sel", "eau", "farine", "huile", "lait",
++    "di", "con", "zucchero", "sale", "acqua", "farina", "olio", "latte", "naturale",
++}
++
++
++_GERMAN_ENDINGS = ("öl", "mehl", "zucker", "salz", "milch", "wasser", "pulver", "extrakt")
++
++
++def _looks_supported(ingredients_raw: str, matches: Dict[str, list]) -> bool:
++    """True if the list looks like English, German, French or Italian."""
++    words = set(re.findall(r"[^\W\d_]+", ingredients_raw.lower()))
++    if words & _COMMON_WORDS:
++        return True
++    if any(w.endswith(_GERMAN_ENDINGS) for w in words):
++        return True
++    # a match in any group except the (very short, multi-language) allergen list
++    return any(v for g, v in matches.items() if g != "allergens")
++
++
+ @lru_cache(maxsize=1)
+ def _pipeline():
+     return IngredientParser(), OntologyRouter(), OntologyMatcher(load_ontology()), DecisionEngine()
+@@ -38,7 +64,8 @@ def tags_from_ingredients(ingredients_raw: str, category: Optional[str] = None,
+                           name: Optional[str] = None) -> Optional[Dict[str, bool]]:
+     """
+     Tags for the search filters, derived from the ingredient list.
+-    Returns None when there are no ingredients (the caller keeps its fallback).
++    Returns None when there are no ingredients, or when the list is in a
++    language the ontology does not cover (the caller keeps its fallback).
+ 
+     Search-filter meaning:
+       vegan        -> no animal ingredient found: milk, egg, honey, meat,
+@@ -59,6 +86,8 @@ def tags_from_ingredients(ingredients_raw: str, category: Optional[str] = None,
+         return None
+ 
+     matches = matcher.match(parsed, router.route(category or ""))
++    if not _looks_supported(ingredients_raw, matches):
++        return None  # language not supported: keep the existing tags
+     if name and "halal" in name.lower() and not matches.get("halal_labels"):
+         matches["halal_labels"] = ["halal (product name)"]
+     v = engine.evaluate(matches)
+diff --git a/data/ontology/animal_products.csv b/data/ontology/animal_products.csv
+index 878dccb..57d21ab 100644
+--- a/data/ontology/animal_products.csv
++++ b/data/ontology/animal_products.csv
+@@ -9,5 +9,5 @@ collagen,collagen; collagen peptides; hydrolysed collagen,Kollagen; Kollagenpept
+ whey,whey; whey protein; lactoserum,Molke; Molkenprotein,lactosérum; protéine de lactosérum,siero; proteina del siero di latte
+ casein,casein; caseinate; milk protein,Kasein; Kaseinat; Milchprotein,caséine; caséinate; protéine de lait,caseina; caseinato; proteina del latte
+ lard,lard; animal fat; pork fat; beef tallow,Schmalz; Schweinefett; Rinderfett; tierisches Fett,saindoux; graisse animale; graisse de porc; suif de bœuf,strutto; grasso animale; grasso di maiale; sego di manzo
+-dairy_products,butter; cream; cheese; ghee; lactose; buttermilk; skimmed milk; whole milk; milk powder; yoghurt; yogurt,Butter; Butterreinfett; Sahne; Rahm; Käse; Laktose; Buttermilch; Magermilch; Vollmilch; Milchpulver; Joghurt,beurre; crème fraîche; crème entière; crème liquide; crème de lait; fromage; lactose; babeurre; lait écrémé; lait entier; poudre de lait; yaourt,burro; panna; formaggio; lattosio; latticello; latte scremato; latte intero; latte in polvere; yogurt
++dairy_products,butter; cream; cheese; ghee; lactose; buttermilk; skimmed milk; whole milk; milk powder; yoghurt; yogurt; double cream; milk protein; milk proteins,Butter; Butterreinfett; Sahne; Rahm; Käse; Laktose; Buttermilch; Magermilch; Vollmilch; Milchpulver; Joghurt; Doppelrahm; Milcheiweiss; Milcheiweiß; Milchproteine,beurre; crème fraîche; crème entière; crème liquide; crème de lait; fromage; lactose; babeurre; lait écrémé; lait entier; poudre de lait; yaourt; double-crème; double crème; crème double; protéines lactiques; protéines de lait; protéines laitières,burro; panna; formaggio; lattosio; latticello; latte scremato; latte intero; latte in polvere; yogurt; doppia panna; proteine del latte
+ cheese_types,mascarpone; mozzarella; ricotta; quark; skyr; kefir; parmesan; cheddar; feta; emmental; gruyère; raclette cheese; cottage cheese; cream cheese; curd,Mascarpone; Mozzarella; Ricotta; Quark; Skyr; Kefir; Parmesan; Hüttenkäse; Frischkäse; Emmentaler; Greyerzer; Sbrinz; Tilsiter; Appenzeller; Raclettekäse; Sauerrahm; Schlagrahm; Vollrahm,mascarpone; mozzarella; ricotta; séré; skyr; kéfir; parmesan; emmental; gruyère; fromage frais; fromage blanc; raclette,mascarpone; mozzarella; ricotta; quark; skyr; kefir; parmigiano; grana padano; emmental; groviera; gorgonzola
+diff --git a/data/ontology/coeliac_triggers.csv b/data/ontology/coeliac_triggers.csv
+index 5cdfd60..ff29bb4 100644
+--- a/data/ontology/coeliac_triggers.csv
++++ b/data/ontology/coeliac_triggers.csv
+@@ -1,6 +1,6 @@
+ term,en,de,fr,it
+ gluten,gluten,Gluten,gluten,glutine
+-wheat,wheat; wheat flour; wheat starch; durum wheat; wheat bran,Weizen; Weizenmehl; Weizenstärke; Hartweizen; Kleie,blé; farine de blé; amidon de blé; blé dur; son de blé,frumento; farina di frumento; amido di frumento; grano duro
++wheat,wheat; wheat flour; wheat starch; durum wheat; wheat bran,Weizen; Weizenmehl; Weizenstärke; Hartweizen; Kleie,blé; farine de blé; amidon de blé; blé dur; son de blé; froment; farine de froment,frumento; farina di frumento; amido di frumento; grano duro
+ rye,rye; rye flour; rye bread; rye starch,Roggen; Roggenmehl; Roggenbrot; Roggenstärke,seigle; farine de seigle; pain de seigle,segale; farina di segale; pane di segale
+ barley,barley; barley malt; barley flour; pearl barley,Gerste; Gerstenmalz; Gerstenmehl; Perlgraupen,orge; malt d'orge; farine d'orge; orge perlé,orzo; malto d'orzo; farina d'orzo; orzo perlato
+ spelt,spelt; spelt flour; dinkel,Dinkel; Dinkelmehl,épeautre; farine d'épeautre,farro; farina di farro; spelta
+diff --git a/data/ontology/fish_synonyms.csv b/data/ontology/fish_synonyms.csv
+index a5ff7d4..9687fa3 100644
+--- a/data/ontology/fish_synonyms.csv
++++ b/data/ontology/fish_synonyms.csv
+@@ -14,3 +14,4 @@ tilapia,tilapia,Tilapia,tilapia,tilapia
+ pangasius,pangasius; basa; swai,Pangasius; Basa,pangasius; basa,pangasio; basa
+ sea_bass,sea bass; branzino,Wolfsbarsch; Branzino,bar; loup de mer; branzino,branzino; spigola
+ sea_bream,sea bream; dorade,Dorade; Brassen,dorade; daurade,orata; dorata
++pollock,pollock; alaska pollock; coley; saithe; hake; haddock; plaice; trout; herring; sardine; anchovy; pangasius,Seelachs; Alaska-Seelachs; Pollack; Köhler; Seehecht; Schellfisch; Scholle; Seezunge; Forelle; Hering; Sardine; Sardelle; Pangasius; Egli; Felchen; Zander,colin; colin d'alaska; lieu noir; merlu; églefin; plie; truite; hareng; sardine; anchois; pangasius; féra; sandre,merluzzo d'alaska; nasello; eglefino; platessa; sogliola; trota; aringa; sardina; acciuga; pangasio; persico; lavarello
+diff --git a/data/ontology/meat.csv b/data/ontology/meat.csv
+index 52091c9..a8d6979 100644
+--- a/data/ontology/meat.csv
++++ b/data/ontology/meat.csv
+@@ -9,4 +9,4 @@ rabbit,rabbit; wild rabbit,Kaninchen; Wildkaninchen,lapin; lapin sauvage,conigli
+ venison,venison; deer; game meat; wild boar,Wild; Hirsch; Wildfleisch; Wildschwein,venaison; cerf; gibier; sanglier,selvaggina; cervo; carne di selvaggina; cinghiale
+ horse,horse meat; equine,Pferdefleisch; Pferd; equin,viande de cheval; cheval; équin,carne di cavallo; cavallo; equino
+ offal,offal; liver; kidney; heart; tongue; tripe,Innereien; Leber; Niere; Herz; Zunge; Kutteln,abats; foie; rognon; cœur; langue; tripes,frattaglie; fegato; rene; cuore; lingua; trippa
+-minced,minced meat; ground meat; mince; hamburger,Hackfleisch; Faschiertes; Hamburger,viande hachée; haché; hamburger,carne macinata; trito; hamburger
++minced,minced meat; ground meat; mince; hamburger,Hackfleisch; Faschiertes; Hamburger,viande hachée; steak haché; hamburger,carne macinata; carne trita; hamburger
+diff --git a/tests/test_food_analysis.py b/tests/test_food_analysis.py
+index 11396f4..7ff5464 100644
+--- a/tests/test_food_analysis.py
++++ b/tests/test_food_analysis.py
+@@ -234,3 +234,51 @@ def test_search_tags_follow_halal_in_product_name():
+     assert tags_from_ingredients("Chicken breast", "meat", name="Halal Chicken Breast 500g")["halal"]
+     assert not tags_from_ingredients("Chicken breast", "meat")["vegan"]
+     assert not tags_from_ingredients("Skyr, Zitrone", "dairy")["lactose_free"]
++
++
++# ── real Open Food Facts spellings (found by the production backfill) ─
++
++def test_ocr_capital_i_in_fish_name():
++    v = analyse("65% _Alaska-SeeIachsfiIet_, _Weizenmehl_, Sonnenblumenöl, Wasser", "fish")
++    assert not_vegan(v) and not v["vegetarian"]
++
++
++def test_french_plural_fish_name():
++    v = analyse("Filets de _maquereaux_ (60%), eau, vin blanc, sel", "fish")
++    assert not_vegan(v) and not v["vegetarian"]
++
++
++@pytest.mark.parametrize("ingredients", ["oeufs", "Œufs frais", "œufs"])
++def test_oeuf_with_and_without_ligature(ingredients):
++    assert not_vegan(analyse(ingredients))
++
++
++def test_landwirtschaft_is_not_sheep():
++    v = analyse("Amaranth* gepufft *aus biologischer Landwirtschaft")
++    assert v["vegetarian"] and v["vegan_likely"]
++
++
++def test_peux_contenir_is_a_trace():
++    v = analyse("farine de maïs, huile de tournesol. Peux contenir du lait et du soja.")
++    assert v["vegan_likely"]
++
++
++def test_double_creme_is_dairy():
++    assert not_vegan(analyse("double-crème, protéines lactiques, sel", "dairy"))
++
++
++def test_froment_is_gluten():
++    from backend.services.product_tags import tags_from_ingredients
++    assert not tags_from_ingredients("sucre, farine de FROMENT 15,5%, sel", "bakery")["gluten_free"]
++
++
++def test_unsupported_language_is_left_unchanged():
++    from backend.services.product_tags import tags_from_ingredients
++    croatian = ("19% kikiriki, 14% grožđice, šećer od šećerne trske, palmina mast, med, "
++                "djelomično obrano mlijeko u prahu. Može sadržavati tragove jaja, lupine i soje.")
++    assert tags_from_ingredients(croatian, "snacks") is None
++
++
++def test_chopped_fruit_is_not_minced_meat():
++    v = analyse("abricots secs hachés, noisettes hachées grillées, amandes")
++    assert v["vegetarian"] and v["vegan_likely"]
