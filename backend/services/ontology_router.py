@@ -34,6 +34,8 @@ class OntologyRouter:
             "lactose_free_labels",
             "vegan_markers",
             "vegetarian_markers",
+            "egg_synonyms",
+            "halal_labels",
         ]
 
         self.category_routes = {

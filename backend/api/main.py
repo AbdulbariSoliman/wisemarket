@@ -296,6 +296,8 @@ def analyze_product(
     try:
         groups  = app.state.router.route(category)
         matches = app.state.matcher.match(parsed_ingredients, groups)
+        if name and "halal" in str(name).lower() and not matches.get("halal_labels"):
+            matches["halal_labels"] = ["halal (product name)"]
         verdicts = app.state.decision_engine.evaluate(matches, lang=lang)
     except Exception as e:
         logger.exception("Ontology pipeline failed for GTIN %s", gtin)

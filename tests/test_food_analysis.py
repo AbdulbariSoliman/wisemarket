@@ -187,3 +187,50 @@ def test_palm_written_without_oil_word_is_detected():
 
 def test_palm_sugar_is_not_palm_oil():
     assert not analyse("Sucre de palme, noix de coco")["has_palm_oil"]
+
+
+# ── meat, fish, eggs and halal ───────────────────────────────────────
+
+@pytest.mark.parametrize("ingredients, category", [
+    ("Chicken breast", "meat"),
+    ("Atlantic salmon (Salmo salar) 100%", "fish"),
+    ("Filets de maquereau 70%, huile de colza, poivre, sel", "fish"),
+    ("Hühnerei, Zucker, Weizenmehl", "bakery"),
+    ("Vollei, Zucker", "bakery"),
+])
+def test_meat_fish_and_egg_are_never_vegan(ingredients, category):
+    assert not_vegan(analyse(ingredients, category))
+
+
+def test_fish_is_halal_but_not_vegetarian():
+    v = analyse("Filets de maquereau 70%, huile de colza, sel", "fish")
+    assert v["halal"] and not v["vegetarian"]
+
+
+def test_meat_without_halal_label_is_not_halal():
+    assert not analyse("Chicken breast", "meat")["halal"]
+
+
+def test_meat_with_halal_label_is_halal():
+    assert analyse("Halal chicken breast", "meat")["halal"]
+
+
+def test_gelatine_without_halal_label_is_not_halal():
+    assert not analyse("Zucker, Glukosesirup, Gelatine (Rind)", "snacks")["halal"]
+
+
+def test_wine_grape_name_is_alcohol():
+    assert not analyse("Cabernet Sauvignon", "beverages")["halal"]
+
+
+@pytest.mark.parametrize("ingredients", ["Skyr, Zitrone, Zucker", "Mascarpone (Rahm)"])
+def test_fresh_cheese_is_dairy(ingredients):
+    assert not_vegan(analyse(ingredients, "dairy"))
+
+
+def test_search_tags_follow_halal_in_product_name():
+    from backend.services.product_tags import tags_from_ingredients
+    assert not tags_from_ingredients("Chicken breast", "meat")["halal"]
+    assert tags_from_ingredients("Chicken breast", "meat", name="Halal Chicken Breast 500g")["halal"]
+    assert not tags_from_ingredients("Chicken breast", "meat")["vegan"]
+    assert not tags_from_ingredients("Skyr, Zitrone", "dairy")["lactose_free"]

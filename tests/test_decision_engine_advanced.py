@@ -82,12 +82,35 @@ class TestPorkAndGelatin:
         assert result["halal"] is False
         assert result["vegetarian"] is False
 
-    def test_beef_gelatin_halal_passes(self):
-        """Beef gelatin — no pork, no alcohol — halal is True"""
+    def test_beef_gelatin_needs_halal_label(self):
+        """Beef gelatin without a halal label is not confirmed halal"""
         result = engine.evaluate(empty_matches(animal_products=["beef gelatin"]))
-        assert result["halal"] is True
+        assert result["halal"] is False
         assert result["vegan"] is False
         assert result["vegetarian"] is False
+
+    def test_beef_gelatin_with_halal_label_passes(self):
+        result = engine.evaluate(empty_matches(
+            animal_products=["beef gelatin"], halal_labels=["halal"]))
+        assert result["halal"] is True
+
+    def test_meat_is_never_vegan(self):
+        result = engine.evaluate(empty_matches(meat=["chicken"]))
+        assert result["vegan"] is False
+        assert result["vegan_likely"] is False
+        assert result["vegetarian"] is False
+        assert result["halal"] is False
+
+    def test_fish_is_halal_but_not_vegan(self):
+        result = engine.evaluate(empty_matches(fish_synonyms=["salmon"]))
+        assert result["halal"] is True
+        assert result["vegan_likely"] is False
+        assert result["vegetarian"] is False
+
+    def test_egg_is_vegetarian_not_vegan(self):
+        result = engine.evaluate(empty_matches(egg_synonyms=["egg"]))
+        assert result["vegan_likely"] is False
+        assert result["vegetarian"] is True
 
     def test_lard_in_pastry(self):
         result = engine.evaluate(empty_matches(

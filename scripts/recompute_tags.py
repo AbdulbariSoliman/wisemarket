@@ -9,6 +9,8 @@
 #   python scripts/recompute_tags.py            # preview only, changes nothing
 #   python scripts/recompute_tags.py --apply    # write the new tags
 #   python scripts/recompute_tags.py --store open_food_facts --apply
+#   python scripts/recompute_tags.py --show 7610900027392 3017620422003
+#                                               # explain single products
 # ============================================================
 import argparse
 import collections
@@ -32,9 +34,14 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--apply", action="store_true", help="write changes (default: preview only)")
     ap.add_argument("--store", help="only this store, e.g. open_food_facts")
+    ap.add_argument("--show", nargs="+", metavar="GTIN",
+                    help="print ingredients and old/new tags for these products, change nothing")
     args = ap.parse_args()
 
     sb = get_supabase_client()
+    if args.show:
+        show(sb, args.show)
+        return
     changes = collections.Counter()
     examples = collections.defaultdict(list)
     scanned = updated = 0
@@ -55,7 +62,8 @@ def main() -> None:
 
         for row in rows:
             scanned += 1
-            new = tags_from_ingredients(row.get("ingredients_raw") or "", row.get("category"))
+            new = tags_from_ingredients(row.get("ingredients_raw") or "", row.get("category"),
+                                        row.get("name_en"))
             if not new:
                 continue
             old = row.get("ontology_tags") or {}
@@ -65,8 +73,9 @@ def main() -> None:
             for k, v in diff.items():
                 change = f"{k}: {old.get(k)} -> {v}"
                 changes[change] += 1
-                if len(examples[change]) < 3:
-                    examples[change].append(f"{row['gtin']} {(row.get('name_en') or '')[:35]}")
+                example = f"{row['gtin']} {(row.get('name_en') or '')[:35]}"
+                if len(examples[change]) < 3 and not any(e.startswith(row["gtin"]) for e in examples[change]):
+                    examples[change].append(example)
             if args.apply:
                 sb.table("products").update({"ontology_tags": {**old, **new}}).eq("id", row["id"]).execute()
             updated += 1
@@ -77,6 +86,27 @@ def main() -> None:
         print(f"  {n:6}  {change:28}  e.g. " + "; ".join(examples[change]))
     if not args.apply and updated:
         print("\nRun again with --apply to write these changes.")
+
+
+def show(sb, gtins) -> None:
+    rows = (sb.table("products")
+              .select("gtin, store, name_en, category, ingredients_raw, ontology_tags")
+              .in_("gtin", gtins).execute().data)
+    if not rows:
+        print("No products found for:", " ".join(gtins))
+    seen = set()
+    for row in rows:
+        if row["gtin"] in seen:          # same product in several stores
+            continue
+        seen.add(row["gtin"])
+        old = row.get("ontology_tags") or {}
+        new = tags_from_ingredients(row.get("ingredients_raw") or "", row.get("category"),
+                                        row.get("name_en")) or {}
+        print(f"\n{row['gtin']}  {row.get('name_en')}  [{row.get('category')}]")
+        print(f"  ingredients: {(row.get('ingredients_raw') or '').strip()[:600]}")
+        for k in KEYS:
+            mark = "  <- changes" if old.get(k) != new.get(k) else ""
+            print(f"  {k:13} {str(old.get(k)):5} -> {new.get(k)}{mark}")
 
 
 if __name__ == "__main__":

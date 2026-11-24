@@ -7,6 +7,7 @@ UNIVERSAL = [
     "pork", "alcohol", "meat", "fish_synonyms", "shellfish_synonyms",
     "palm_oil", "coeliac_triggers", "gluten_free_labels",
     "lactose_free_labels", "vegan_markers", "vegetarian_markers",
+    "egg_synonyms", "halal_labels",
 ]
 
 def test_empty_returns_universal():

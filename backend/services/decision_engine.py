@@ -227,6 +227,14 @@ _NON_VEGETARIAN_ANIMAL_WORDS = (
 )
 
 
+# Animal ingredients that need halal slaughter/certification (fish does not).
+_HALAL_SENSITIVE_WORDS = (
+    "gelatin", "gélatine", "gelatina", "collagen", "kollagen", "collagène", "collagene",
+    "lard", "schmalz", "saindoux", "strutto", "tallow", "talg", "suif", "sego",
+    "fleisch", "viande", "meat", "carne",
+)
+
+
 def _has_slaughter_product(animal_hits: List[str]) -> bool:
     """True if any animal hit is a slaughter product (gelatine, lard, meat, fish)."""
     return any(w in hit for hit in animal_hits for w in _NON_VEGETARIAN_ANIMAL_WORDS)
@@ -295,10 +303,20 @@ class DecisionEngine:
         non_vegetarian_hits = pork_hits + meat_hits + fish_hits + shellfish_hits
 
         # ─── CORE VERDICTS ───────────────────────────────────────────
-        halal              = not pork_hits and not alcohol_hits
-        vegan              = not animal_hits and bool(vegan_marker_hits)
-        vegan_likely       = not animal_hits
-        vegetarian         = not non_vegetarian_hits and not _has_slaughter_product(animal_hits)
+        halal_label_hits   = matches.get("halal_labels", [])
+        slaughter_product  = _has_slaughter_product(animal_hits)
+        # Any animal ingredient at all (dairy, egg, honey, meat, fish, ...)
+        egg_hits           = matches.get("egg_synonyms", [])
+        any_animal         = bool(animal_hits) or bool(non_vegetarian_hits) or bool(egg_hits)
+        # Meat, gelatine or lard is only halal when the product says so;
+        # fish and seafood are halal without a label.
+        needs_halal_label  = bool(meat_hits) or any(
+            w in h for h in animal_hits for w in _HALAL_SENSITIVE_WORDS)
+        halal              = (not pork_hits and not alcohol_hits
+                              and (not needs_halal_label or bool(halal_label_hits)))
+        vegan              = not any_animal and bool(vegan_marker_hits)
+        vegan_likely       = not any_animal
+        vegetarian         = not non_vegetarian_hits and not slaughter_product
         allergen_warning   = bool(allergen_hits)
         regional           = bool(regional_hits)
 

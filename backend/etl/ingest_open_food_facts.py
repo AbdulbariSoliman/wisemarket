@@ -154,7 +154,7 @@ def map_ontology_tags(allergens, categories, nutriscore, name="", ingredients=""
     # /analyze/{gtin}, so search filters and product pages agree. The
     # allergen-based values above remain the fallback for products without
     # ingredients.
-    from_ingredients = tags_from_ingredients(ingredients, map_category(categories))
+    from_ingredients = tags_from_ingredients(ingredients, map_category(categories), name)
     if from_ingredients:
         tags.update(from_ingredients)
         tags["lactose_free"] = tags["lactose_free"] and "milk" not in contains

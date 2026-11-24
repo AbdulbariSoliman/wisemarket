@@ -26,7 +26,7 @@ def test_all_positive_except_vegan():
 
 def test_pork_breaks_halal_and_vegetarian():
     # Pork product — breaks halal and vegetarian
-    # no animal_products hit + no vegan marker = vegan_likely only
+    # meat/pork is an animal ingredient, so the product can never be vegan
     engine = DecisionEngine()
     matches = {
         "pork": ["bacon"],
@@ -41,7 +41,7 @@ def test_pork_breaks_halal_and_vegetarian():
     assert result["halal"] is False
     assert result["vegetarian"] is False
     assert result["vegan"] is False
-    assert result["vegan_likely"] is True
+    assert result["vegan_likely"] is False
 
 
 def test_alcohol_breaks_halal():
