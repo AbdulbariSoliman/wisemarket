@@ -49,6 +49,28 @@ DIETARY_KEYWORDS = {
 
 STORE_KEYWORDS = {s: s for s in PUBLIC_STORES}
 
+# Filler words removed from search text (EN/DE/FR/IT), used when the LLM
+# term extraction is unavailable, so the DB is never searched with a full sentence.
+STOP_WORDS = {
+    "find", "show", "me", "is", "the", "a", "an", "where", "what", "which", "how",
+    "much", "many", "cheapest", "cheap", "price", "prices", "of", "for", "in", "on",
+    "any", "some", "can", "eat", "i", "my", "with", "and", "or", "to", "do", "you",
+    "have", "today", "sale", "deal", "deals", "it", "this", "that", "are", "please",
+    "zeig", "mir", "ist", "der", "die", "das", "ein", "eine", "wo", "was", "kostet",
+    "günstig", "billig", "gibt", "es", "für", "und", "mit",
+    "montre", "moi", "le", "la", "les", "un", "une", "où", "est", "moins", "cher", "pour",
+    "mostrami", "il", "lo", "gli", "dove", "costa", "meno", "caro", "per",
+    "protein", "proteins", "calories", "sugar", "nutrition",
+}
+for _kws in DIETARY_KEYWORDS.values():
+    STOP_WORDS.update(k.lower() for k in _kws)
+
+
+def _search_words(text: str) -> List[str]:
+    """Meaningful words of a query, e.g. 'show me vegan pasta' -> ['pasta']."""
+    words = re.findall(r"[\w\-]+", text.lower())
+    return [w for w in words if len(w) >= 3 and w not in STOP_WORDS and not w.isdigit()]
+
 
 # ── User profile loader ───────────────────────────────────────
 
@@ -151,12 +173,12 @@ Examples:
 'zeig mir Eier' -> Eier
 Reply with ONLY the product name, no quotes, no punctuation."""
     messages = build_messages(system, user_input)
+    fallback = " ".join(_search_words(user_input)) or user_input
     try:
-        result = call_intent(messages, max_tokens=10).strip()
-        result = result.strip()
-        return result if len(result) > 1 else user_input
+        result = call_intent(messages, max_tokens=10).strip().strip("'\".")
+        return result if len(result) > 1 else fallback
     except Exception:
-        return user_input
+        return fallback
 
 
 def _agent_find_product(
@@ -178,8 +200,12 @@ def _agent_find_product(
         )
         .eq("is_active", True)
         .in_("store", [store] if store else PUBLIC_STORES)
-        .ilike(name_col, f"%{query}%")
     )
+    words = _search_words(query) or [query.strip()]
+    if len(words) == 1:
+        q = q.ilike(name_col, f"%{words[0]}%")
+    else:
+        q = q.or_(",".join(f"{name_col}.ilike.%{w}%" for w in words))
 
     # Apply dietary filters
     for tag, val in dietary.items():
@@ -201,7 +227,7 @@ def _agent_similar_products(
     dietary: Dict,
     profile: Optional[Dict],
     lang: str,
-    exclude_gtins: List[str] = [],
+    exclude_gtins: Optional[List[str]] = None,
     limit: int = 4,
 ) -> Dict:
     """
@@ -237,7 +263,8 @@ def _agent_similar_products(
     resp = q.limit(limit * 3).execute()
 
     # Filter out already-seen GTINs
-    results = [p for p in resp.data if p.get("gtin") not in exclude_gtins]
+    exclude = set(exclude_gtins or [])
+    results = [p for p in resp.data if p.get("gtin") not in exclude]
 
     # Deduplicate by GTIN (keep first store)
     seen = set()
@@ -389,6 +416,14 @@ Do not invent prices, ingredients, or product details not shown above."""
         return "I'm sorry, I couldn't process your request right now. Please try again."
 
 
+_UNAVAILABLE = {
+    "en": "Sorry, product data is temporarily unavailable. Please try again in a moment.",
+    "de": "Entschuldigung, die Produktdaten sind gerade nicht verfügbar. Bitte versuchen Sie es gleich nochmals.",
+    "fr": "Désolé, les données produits sont momentanément indisponibles. Veuillez réessayer dans un instant.",
+    "it": "Spiacenti, i dati dei prodotti non sono al momento disponibili. Riprova tra poco.",
+}
+
+
 # ── Main agent entry point ────────────────────────────────────
 
 def run_agent(
@@ -423,59 +458,58 @@ def run_agent(
     # 4. Route to correct DB agent
     data = {}
     products = []
+    gtin_match = re.search(r"\b\d{8,14}\b", user_input)
 
-    if intent == "find_product":
-        data = _agent_find_product(
-            user_input, dietary, detected_store, profile, lang
-        )
-        products = data.get("products", [])
-
-    elif intent == "check_dietary":
-        data = _agent_find_product(
-            user_input, dietary, detected_store, profile, lang
-        )
-        products = data.get("products", [])
-
-    elif intent in ("price_check", "compare_stores"):
-        gtin_match = re.search(r'\b\d{8,14}\b', user_input)
-        if gtin_match:
-            data = _agent_price_check(gtin_match.group(), None)
-        else:
+    try:
+        if intent in ("find_product", "check_dietary"):
             search_term = _extract_search_term(user_input, lang)
-            prod_data = _agent_find_product(
-                search_term, {}, None, profile, lang
+            data = _agent_find_product(
+                search_term, dietary, detected_store, profile, lang
             )
-            if prod_data.get("products"):
-                gtin = prod_data["products"][0].get("gtin")
-                price_snapshot = _agent_price_check(gtin, None)
-                data = {
-                    "product":        prod_data["products"][0],
-                    "cheapest_store": price_snapshot.get("cheapest_store"),
-                    "cheapest_price": price_snapshot.get("cheapest_price"),
-                    "all_prices":     price_snapshot.get("prices_chf", {}),
-                    "per_100g":       price_snapshot.get("prices_per_100g", {}),
-                    "spread_pct":     price_snapshot.get("price_spread_pct"),
-                }
-                products = prod_data["products"]
+            products = data.get("products", [])
+
+        elif intent in ("price_check", "compare_stores", "basket_advice"):
+            if gtin_match:
+                data = _agent_price_check(gtin_match.group(), None)
             else:
-                data = {"message": "Product not found"}
+                search_term = _extract_search_term(user_input, lang)
+                prod_data = _agent_find_product(
+                    search_term, {}, None, profile, lang
+                )
+                if prod_data.get("products"):
+                    gtin = prod_data["products"][0].get("gtin")
+                    price_snapshot = _agent_price_check(gtin, None)
+                    data = {
+                        "product":        prod_data["products"][0],
+                        "cheapest_store": price_snapshot.get("cheapest_store"),
+                        "cheapest_price": price_snapshot.get("cheapest_price"),
+                        "all_prices":     price_snapshot.get("prices_chf", {}),
+                        "per_100g":       price_snapshot.get("prices_per_100g", {}),
+                        "spread_pct":     price_snapshot.get("price_spread_pct"),
+                    }
+                    products = prod_data["products"]
+                else:
+                    data = {"message": "Product not found"}
 
-    elif intent == "nutrition_query":
-        gtin_match = re.search(r'\b\d{8,14}\b', user_input)
-        if gtin_match:
-            data = _agent_nutrition(gtin_match.group(), detected_store)
-        else:
-            prod_data = _agent_find_product(
-                user_input, {}, detected_store, profile, lang
-            )
-            if prod_data.get("products"):
-                gtin = prod_data["products"][0].get("gtin")
-                data = _agent_nutrition(gtin, detected_store)
-                products = prod_data["products"]
+        elif intent == "nutrition_query":
+            if gtin_match:
+                data = _agent_nutrition(gtin_match.group(), detected_store)
+            else:
+                search_term = _extract_search_term(user_input, lang)
+                prod_data = _agent_find_product(
+                    search_term, {}, detected_store, profile, lang
+                )
+                if prod_data.get("products"):
+                    gtin = prod_data["products"][0].get("gtin")
+                    data = _agent_nutrition(gtin, detected_store)
+                    products = prod_data["products"]
+                else:
+                    data = {"message": "Product not found"}
 
-    elif intent == "scan_lookup":
-        gtin_match = re.search(r'\b\d{8,14}\b', user_input)
-        if gtin_match:
+        elif intent == "promotion_search":
+            data = _agent_promotions(detected_store, lang)
+
+        elif intent == "scan_lookup" and gtin_match:
             supabase = get_supabase_client()
             resp = (
                 supabase.table("products")
@@ -487,7 +521,16 @@ def run_agent(
             data = {"products": resp.data}
             products = resp.data
 
-    # general intent — no DB query, LLM answers from context only
+        # general intent: no DB query, LLM answers from context only
+
+    except Exception as e:
+        logger.exception("Agent DB step failed for intent %s", intent)
+        return {
+            "response": _UNAVAILABLE.get(lang, _UNAVAILABLE["en"]),
+            "intent":   intent,
+            "products": [],
+            "data":     {"error": "database_unavailable"},
+        }
 
     # 5. Compose and refine answer
     response = _compose_and_refine(
