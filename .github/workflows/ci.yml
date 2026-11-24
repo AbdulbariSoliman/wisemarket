@@ -10,6 +10,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
       - run: pip install -r requirements.txt
       - name: Run logic tests (integration auto-skipped without DB)
         env:
@@ -24,25 +25,48 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
       - name: Install Supabase CLI
         uses: supabase/setup-cli@v1
         with:
           version: latest
-      - name: Start Supabase (Postgres + PostgREST)
-        run: supabase start
-      - name: Apply schema + seed
+      # supabase/ is git-ignored, so create a fresh local config in CI
+      - name: Create local Supabase config
+        run: supabase init --force
+      - name: Start Supabase (Postgres + API gateway + PostgREST only)
+        run: supabase start -x gotrue,realtime,storage-api,imgproxy,mailpit,studio,edge-runtime,logflare,vector,supavisor,postgres-meta
+      - name: Apply schema + migrations + seed
         run: |
           DB_URL="$(supabase status -o env | grep '^DB_URL=' | cut -d= -f2- | tr -d '"')"
-          echo "Applying schema..."
-          psql "$DB_URL" -f backend/schema/schema.sql
-          echo "Applying seed..."
-          psql "$DB_URL" -f backend/schema/seed_test.sql
+          psql "$DB_URL" -q -f backend/schema/schema.sql
+          for f in backend/schema/migrations/*.sql; do psql "$DB_URL" -q -f "$f"; done
+          psql "$DB_URL" -q -f backend/schema/seed_test.sql
+          psql "$DB_URL" -c "NOTIFY pgrst, 'reload schema';"
+          sleep 3
       - run: pip install -r requirements.txt
       - name: Run integration tests
         env:
           WISEMARKET_ROOT: ${{ github.workspace }}
           ADMIN_API_KEY: test-admin-key
+        # The API runs with the service_role key in production (RLS has no
+        # policies yet), so the tests use the same key.
         run: |
           export SUPABASE_URL="$(supabase status -o env | grep '^API_URL=' | cut -d= -f2- | tr -d '"')"
-          export SUPABASE_KEY="$(supabase status -o env | grep '^ANON_KEY=' | cut -d= -f2- | tr -d '"')"
+          export SUPABASE_KEY="$(supabase status -o env | grep '^SERVICE_ROLE_KEY=' | cut -d= -f2- | tr -d '"')"
           pytest -m integration -q
+
+  frontend-build:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend/wisemarket
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/wisemarket/package-lock.json
+      - run: npm ci
+      - run: npm run build
