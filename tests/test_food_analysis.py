@@ -234,3 +234,51 @@ def test_search_tags_follow_halal_in_product_name():
     assert tags_from_ingredients("Chicken breast", "meat", name="Halal Chicken Breast 500g")["halal"]
     assert not tags_from_ingredients("Chicken breast", "meat")["vegan"]
     assert not tags_from_ingredients("Skyr, Zitrone", "dairy")["lactose_free"]
+
+
+# ── real Open Food Facts spellings (found by the production backfill) ─
+
+def test_ocr_capital_i_in_fish_name():
+    v = analyse("65% _Alaska-SeeIachsfiIet_, _Weizenmehl_, Sonnenblumenöl, Wasser", "fish")
+    assert not_vegan(v) and not v["vegetarian"]
+
+
+def test_french_plural_fish_name():
+    v = analyse("Filets de _maquereaux_ (60%), eau, vin blanc, sel", "fish")
+    assert not_vegan(v) and not v["vegetarian"]
+
+
+@pytest.mark.parametrize("ingredients", ["oeufs", "Œufs frais", "œufs"])
+def test_oeuf_with_and_without_ligature(ingredients):
+    assert not_vegan(analyse(ingredients))
+
+
+def test_landwirtschaft_is_not_sheep():
+    v = analyse("Amaranth* gepufft *aus biologischer Landwirtschaft")
+    assert v["vegetarian"] and v["vegan_likely"]
+
+
+def test_peux_contenir_is_a_trace():
+    v = analyse("farine de maïs, huile de tournesol. Peux contenir du lait et du soja.")
+    assert v["vegan_likely"]
+
+
+def test_double_creme_is_dairy():
+    assert not_vegan(analyse("double-crème, protéines lactiques, sel", "dairy"))
+
+
+def test_froment_is_gluten():
+    from backend.services.product_tags import tags_from_ingredients
+    assert not tags_from_ingredients("sucre, farine de FROMENT 15,5%, sel", "bakery")["gluten_free"]
+
+
+def test_unsupported_language_is_left_unchanged():
+    from backend.services.product_tags import tags_from_ingredients
+    croatian = ("19% kikiriki, 14% grožđice, šećer od šećerne trske, palmina mast, med, "
+                "djelomično obrano mlijeko u prahu. Može sadržavati tragove jaja, lupine i soje.")
+    assert tags_from_ingredients(croatian, "snacks") is None
+
+
+def test_chopped_fruit_is_not_minced_meat():
+    v = analyse("abricots secs hachés, noisettes hachées grillées, amandes")
+    assert v["vegetarian"] and v["vegan_likely"]

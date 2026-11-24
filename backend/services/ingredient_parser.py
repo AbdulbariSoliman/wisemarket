@@ -6,7 +6,7 @@ from typing import List
 # Shared by the parser (to keep the statement as one item) and the matcher
 # (to ignore it for diet verdicts, but keep it for allergen / gluten warnings).
 TRACE_PATTERN = re.compile(
-    r"(peut contenir|peut aussi contenir|traces? (?:de|d'|éventuelles)|"
+    r"(peut contenir|peux contenir|peuvent contenir|peut aussi contenir|traces? (?:de|d'|éventuelles)|"
     r"fabriqué dans un atelier|fabriqué dans une usine|"
     r"may contain|may also contain|traces? of|"
     r"made in a factory|produced in a factory|made in a facility|produced in a facility|"
@@ -120,6 +120,10 @@ class IngredientParser:
 
         # Open Food Facts marks allergens like _blé_ / _milk_
         raw_text = raw_text.replace("_", " ")
+        # OCR often reads a lower-case "l" as a capital "I" ("SeeIachsfiIet")
+        raw_text = re.sub(r"(?<=[a-zäöüßéèàç])I(?=[a-zäöüßéèàç])", "l", raw_text)
+        # "œuf" and "oeuf" are the same word
+        raw_text = raw_text.replace("œ", "oe").replace("Œ", "Oe")
 
         # Keep a "may contain ..." statement as ONE item, so it can be
         # recognised as a trace warning instead of real ingredients.

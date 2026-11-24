@@ -7,6 +7,8 @@ from backend.services.ingredient_parser import TRACE_PATTERN
 # Phrases that contain an animal / palm word but are NOT that ingredient.
 # They are removed from an ingredient before matching the groups below.
 PLANT_EXCEPTIONS = [
+    # German words that contain a food word by accident ("Landwirtschaft" has "schaf")
+    "landwirtschaft", "wirtschaft",
     # cocoa / nut / shea "butter"
     "cocoa butter", "beurre de cacao", "kakaobutter", "burro di cacao",
     "peanut butter", "beurre de cacahuète", "beurre de cacahuete", "erdnussbutter",
@@ -108,8 +110,10 @@ class OntologyMatcher:
     def __init__(self, ontology_data: Dict[str, List[dict]]) -> None:
         self.ontology_index = self._build_index(ontology_data)
         self.phrase_index = self._build_phrase_index(ontology_data)
-        self._exceptions = sorted(PLANT_EXCEPTIONS, key=len, reverse=True)
-        self._meat_exceptions = sorted(MEAT_GROUP_EXCEPTIONS, key=len, reverse=True)
+        self._exceptions = sorted({e.replace("œ", "oe") for e in PLANT_EXCEPTIONS},
+                                  key=len, reverse=True)
+        self._meat_exceptions = sorted({e.replace("œ", "oe") for e in MEAT_GROUP_EXCEPTIONS},
+                                       key=len, reverse=True)
 
     # ── index building ─────────────────────────────────────────
 
@@ -121,7 +125,7 @@ class OntologyMatcher:
             if not value:
                 continue
             for part in str(value).split(";"):
-                token = part.strip().lower().replace("_", " ")
+                token = part.strip().lower().replace("_", " ").replace("œ", "oe")
                 if token:
                     terms.add(token)
         return terms
@@ -155,7 +159,9 @@ class OntologyMatcher:
             for phrase in sorted(phrases, key=len, reverse=True):
                 if len(phrase) < 3:
                     continue  # too short to match safely inside other text
-                pattern = re.compile(r"(?<!\w)" + re.escape(phrase) + r"(?!\w)")
+                # simple plurals: "maquereau" also matches "maquereaux"
+                plural = r"(?:s|x|es)?" if len(phrase) >= 4 and phrase[-1].isalpha() else ""
+                pattern = re.compile(r"(?<!\w)" + re.escape(phrase) + plural + r"(?!\w)")
                 compound = (
                     phrase in german
                     and len(phrase) >= GERMAN_COMPOUND_MIN_LEN
