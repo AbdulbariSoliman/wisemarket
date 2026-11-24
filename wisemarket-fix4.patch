@@ -1,0 +1,195 @@
+diff --git a/backend/api/main.py b/backend/api/main.py
+index b2f2fd0..c071d93 100644
+--- a/backend/api/main.py
++++ b/backend/api/main.py
+@@ -27,6 +27,7 @@ from backend.services.decision_engine import DecisionEngine
+ from backend.services.ingredient_parser import IngredientParser
+ from backend.services.ontology_matcher import OntologyMatcher
+ from backend.services.ontology_router import OntologyRouter
++from backend.services.product_tags import apply_name_hints
+ 
+ load_dotenv()
+ 
+@@ -296,8 +297,7 @@ def analyze_product(
+     try:
+         groups  = app.state.router.route(category)
+         matches = app.state.matcher.match(parsed_ingredients, groups)
+-        if name and "halal" in str(name).lower() and not matches.get("halal_labels"):
+-            matches["halal_labels"] = ["halal (product name)"]
++        matches = apply_name_hints(matches, name)
+         verdicts = app.state.decision_engine.evaluate(matches, lang=lang)
+     except Exception as e:
+         logger.exception("Ontology pipeline failed for GTIN %s", gtin)
+diff --git a/backend/services/ontology_matcher.py b/backend/services/ontology_matcher.py
+index 3375d6b..f1ffc1a 100644
+--- a/backend/services/ontology_matcher.py
++++ b/backend/services/ontology_matcher.py
+@@ -60,6 +60,8 @@ MEAT_GROUP_EXCEPTIONS = [
+     "latte di pecora", "latte di capra", "latte di bufala", "formaggio di pecora", "formaggio di capra",
+     "chicken egg", "hen's egg", "œuf de poule", "oeuf de poule", "hühnerei", "uovo di gallina",
+ ]
++# Plant look-alikes must not hide a gluten source
++NO_EXCEPTION_GROUPS = {"coeliac_triggers"}
+ MEAT_GROUPS = {"meat", "pork", "fish_synonyms", "shellfish_synonyms"}
+ 
+ # Groups where a hit means "the product CONTAINS this". For these groups,
+@@ -174,6 +176,8 @@ class OntologyMatcher:
+     # ── matching ───────────────────────────────────────────────
+ 
+     def _strip_exceptions(self, text: str, group: str = "") -> str:
++        if group in NO_EXCEPTION_GROUPS:
++            return text  # "Weizeneiweiß" is plant-based, but it IS gluten
+         phrases = self._exceptions
+         if group in MEAT_GROUPS:
+             phrases = self._meat_exceptions + self._exceptions
+diff --git a/backend/services/product_tags.py b/backend/services/product_tags.py
+index ffb3f36..001aef9 100644
+--- a/backend/services/product_tags.py
++++ b/backend/services/product_tags.py
+@@ -30,6 +30,28 @@ _DAIRY_WORDS = (
+ )
+ 
+ 
++_ALCOHOL_NAME = re.compile(
++    r"\b(bier|beer|bière|biere|birra|lager|wein|wine|vin|vino|prosecco|champagne|"
++    r"cidre|cider|sidro|whisky|whiskey|vodka|rum|rhum|gin|likör|liqueur|liquore)\b")
++_ALCOHOL_FREE_NAME = re.compile(
++    r"alkoholfrei|sans alcool|alcohol[- ]free|non[- ]alcoholic|analcolic|senza alcol|"
++    r"\b0[.,]0\b|ginger|ingwer|root beer")
++
++
++def apply_name_hints(matches: Dict[str, list], name: Optional[str]) -> Dict[str, list]:
++    """Use the product name when the ingredient list is silent:
++    "Halal Chicken Breast" -> halal label, "Appenzeller Bier" -> alcohol."""
++    if not name:
++        return matches
++    low = str(name).lower()
++    if "halal" in low and not matches.get("halal_labels"):
++        matches["halal_labels"] = ["halal (product name)"]
++    if (_ALCOHOL_NAME.search(low) and not _ALCOHOL_FREE_NAME.search(low)
++            and not matches.get("alcohol")):
++        matches["alcohol"] = [f"{low} (product name)"]
++    return matches
++
++
+ # Very common ingredient-list words in the four supported languages. If an
+ # ingredient list contains none of them AND no ontology term matched, it is
+ # probably in another language (e.g. Croatian) and we can't judge it.
+@@ -41,12 +63,28 @@ _COMMON_WORDS = {
+ }
+ 
+ 
++# Very common ingredient words in languages the ontology does NOT cover
++# (Spanish, Portuguese, Dutch, Nordic, Slavic, Turkish ...).
++_FOREIGN_WORDS = {
++    "leche", "harina", "azúcar", "azucar", "trigo", "aceite", "manteca", "huevo", "cebada",
++    "suero", "jarabe", "grasa", "agua", "y", "leite", "farinha", "açúcar", "óleo", "oleo",
++    "peixe", "ovo", "ovos", "água", "em", "sardinhas", "suiker", "tarwebloem", "melk",
++    "ingrediënten", "socker", "sukker", "mjölk", "mælk", "vetemjöl", "hvedemel", "cukr",
++    "mléko", "cukier", "mleko", "mąka", "skład", "složení", "šećer", "mlijeko", "brašno",
++    "şeker", "süt", "cukor", "tej", "liszt",
++}
++# Letters that do not occur in English, German, French or Italian
++_FOREIGN_LETTERS = set("ñãõčřěůłąęśźżőűşğıđćšžåøæ")
++
+ _GERMAN_ENDINGS = ("öl", "mehl", "zucker", "salz", "milch", "wasser", "pulver", "extrakt")
+ 
+ 
+ def _looks_supported(ingredients_raw: str, matches: Dict[str, list]) -> bool:
+     """True if the list looks like English, German, French or Italian."""
+     words = set(re.findall(r"[^\W\d_]+", ingredients_raw.lower()))
++    foreign = len(words & _FOREIGN_WORDS) + sum(1 for w in words if set(w) & _FOREIGN_LETTERS)
++    if foreign >= 2 and foreign >= len(words & _COMMON_WORDS):
++        return False
+     if words & _COMMON_WORDS:
+         return True
+     if any(w.endswith(_GERMAN_ENDINGS) for w in words):
+@@ -88,8 +126,7 @@ def tags_from_ingredients(ingredients_raw: str, category: Optional[str] = None,
+     matches = matcher.match(parsed, router.route(category or ""))
+     if not _looks_supported(ingredients_raw, matches):
+         return None  # language not supported: keep the existing tags
+-    if name and "halal" in name.lower() and not matches.get("halal_labels"):
+-        matches["halal_labels"] = ["halal (product name)"]
++    matches = apply_name_hints(matches, name)
+     v = engine.evaluate(matches)
+ 
+     dairy_hits = [h for h in matches.get("animal_products", [])
+diff --git a/data/ontology/coeliac_triggers.csv b/data/ontology/coeliac_triggers.csv
+index ff29bb4..efa3efe 100644
+--- a/data/ontology/coeliac_triggers.csv
++++ b/data/ontology/coeliac_triggers.csv
+@@ -1,6 +1,6 @@
+ term,en,de,fr,it
+ gluten,gluten,Gluten,gluten,glutine
+-wheat,wheat; wheat flour; wheat starch; durum wheat; wheat bran,Weizen; Weizenmehl; Weizenstärke; Hartweizen; Kleie,blé; farine de blé; amidon de blé; blé dur; son de blé; froment; farine de froment,frumento; farina di frumento; amido di frumento; grano duro
++wheat,wheat; wheat flour; wheat starch; durum wheat; wheat bran; seitan; wheat protein; wheat gluten,Weizen; Weizenmehl; Weizenstärke; Hartweizen; Kleie; Seitan; Weizeneiweiß; Weizeneiweiss; Weizengluten,blé; farine de blé; amidon de blé; blé dur; son de blé; froment; farine de froment; ble; farine de ble; seitan; protéines de blé; gluten de blé,frumento; farina di frumento; amido di frumento; grano duro; seitan; glutine di frumento
+ rye,rye; rye flour; rye bread; rye starch,Roggen; Roggenmehl; Roggenbrot; Roggenstärke,seigle; farine de seigle; pain de seigle,segale; farina di segale; pane di segale
+ barley,barley; barley malt; barley flour; pearl barley,Gerste; Gerstenmalz; Gerstenmehl; Perlgraupen,orge; malt d'orge; farine d'orge; orge perlé,orzo; malto d'orzo; farina d'orzo; orzo perlato
+ spelt,spelt; spelt flour; dinkel,Dinkel; Dinkelmehl,épeautre; farine d'épeautre,farro; farina di farro; spelta
+diff --git a/data/ontology/fish_synonyms.csv b/data/ontology/fish_synonyms.csv
+index 9687fa3..29e103b 100644
+--- a/data/ontology/fish_synonyms.csv
++++ b/data/ontology/fish_synonyms.csv
+@@ -1,7 +1,7 @@
+ term,en,de,fr,it
+ fish,fish,Fisch,poisson,pesce
+ salmon,salmon; atlantic salmon; smoked salmon,Lachs; Atlantischer Lachs; Räucherlachs,saumon; saumon atlantique; saumon fumé,salmone; salmone atlantico; salmone affumicato
+-tuna,tuna; yellowfin; bluefin; albacore,Thunfisch; Gelbflossenthun,thon; thon jaune; thon blanc,tonno; tonno pinna gialla; tonno bianco
++tuna,tuna; yellowfin; bluefin; albacore; bonito; skipjack,Thunfisch; Gelbflossenthun; Bonito,thon; thon jaune; thon blanc; bonite; listao,tonno; tonno pinna gialla; tonno bianco; tonnetto; palamita
+ cod,cod; bacalao; stockfish,Kabeljau; Dorsch; Stockfisch,cabillaud; morue; stockfish,merluzzo; baccalà; stoccafisso
+ trout,trout; rainbow trout; lake trout,Forelle; Regenbogenforelle; Seeforelle,truite; truite arc-en-ciel,trota; trota arcobaleno; trota lacustre
+ herring,herring; matjes,Hering; Matjes,hareng; matjes,aringa; matjes
+@@ -14,4 +14,4 @@ tilapia,tilapia,Tilapia,tilapia,tilapia
+ pangasius,pangasius; basa; swai,Pangasius; Basa,pangasius; basa,pangasio; basa
+ sea_bass,sea bass; branzino,Wolfsbarsch; Branzino,bar; loup de mer; branzino,branzino; spigola
+ sea_bream,sea bream; dorade,Dorade; Brassen,dorade; daurade,orata; dorata
+-pollock,pollock; alaska pollock; coley; saithe; hake; haddock; plaice; trout; herring; sardine; anchovy; pangasius,Seelachs; Alaska-Seelachs; Pollack; Köhler; Seehecht; Schellfisch; Scholle; Seezunge; Forelle; Hering; Sardine; Sardelle; Pangasius; Egli; Felchen; Zander,colin; colin d'alaska; lieu noir; merlu; églefin; plie; truite; hareng; sardine; anchois; pangasius; féra; sandre,merluzzo d'alaska; nasello; eglefino; platessa; sogliola; trota; aringa; sardina; acciuga; pangasio; persico; lavarello
++pollock,pollock; alaska pollock; coley; saithe; hake; haddock; plaice; trout; herring; sardine; anchovy; pangasius,Seelachs; Alaska-Seelachs; Pollack; Köhler; Seehecht; Schellfisch; Scholle; Seezunge; Forelle; Hering; Sardine; Sardelle; Pangasius; Egli; Felchen; Zander,colin; colin d'alaska; lieu noir; merlu; églefin; plie; truite; hareng; sardine; anchois; pangasius; féra; sandre,merluzzo d'alaska; nasello; eglefino; platessa; sogliola; trota; aringa; sardina; acciuga; pangasio; persico; lavarello; sgombri; acciughe; alici; aringhe; trote; sardine
+diff --git a/tests/test_food_analysis.py b/tests/test_food_analysis.py
+index 7ff5464..9ebc722 100644
+--- a/tests/test_food_analysis.py
++++ b/tests/test_food_analysis.py
+@@ -282,3 +282,43 @@ def test_unsupported_language_is_left_unchanged():
+ def test_chopped_fruit_is_not_minced_meat():
+     v = analyse("abricots secs hachés, noisettes hachées grillées, amandes")
+     assert v["vegetarian"] and v["vegan_likely"]
++
++
++# ── second production check ─────────────────────────────────────────
++
++def _tags(ingredients, category="other", name=None):
++    from backend.services.product_tags import tags_from_ingredients
++    return tags_from_ingredients(ingredients, category, name)
++
++
++@pytest.mark.parametrize("ingredients", [
++    "TRIGO integral (50%), chocolate con LECHE (azúcar, manteca de cacao, LECHE entera en polvo), sal",
++    "Sardinhas (peixe), Óleo de soja e Sal.",
++    "Složení: tekutá káva (cukr), MLÉČNÁ čokoláda (cukr, plnotučné sušené MLÉKO), LAKTÓZA",
++])
++def test_spanish_portuguese_czech_are_left_unchanged(ingredients):
++    assert _tags(ingredients) is None
++
++
++def test_seitan_is_gluten():
++    assert not _tags("SEITAN* 71 % (Wasser, WEIZENEIWEIß*), Zwiebeln, Speisesalz", "meat")["gluten_free"]
++
++
++def test_ble_without_accent_is_gluten():
++    assert not _tags("Sucre, farine de BLE, LAIT écrémé en poudre", "bakery")["gluten_free"]
++
++
++def test_bonite_and_italian_plural_are_fish():
++    assert not _tags("Bonite à ventre rayé (Katsuwonus pelamis), eau, sel", "fish")["vegetarian"]
++    assert not _tags("Sgombri, olio di oliva, sale.", "fish")["vegetarian"]
++
++
++def test_beer_in_product_name_is_alcohol():
++    assert not _tags("eau de source, malt d'orge, houblon", "beverages",
++                     "Hell Quöllfrisch Appenzeller Bier")["halal"]
++    assert _tags("Wasser, Gerstenmalz, Hopfen", "beverages", "Alkoholfreies Bier 0.0")["halal"]
++    assert _tags("Wasser, Zucker, Ingwer", "beverages", "Ginger Beer")["halal"]
++
++
++def test_sans_lactose_yogurt_is_lactose_free():
++    assert _tags("Yogourt partiellement écrémé, sans lactose, au lait pasteurisé, sucre", "dairy")["lactose_free"]
