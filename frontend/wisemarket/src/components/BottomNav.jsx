@@ -8,20 +8,20 @@ const tabs = [
   { path: '/profile', icon: User,         label: { en:'Profile', de:'Profil',  fr:'Profil',  it:'Profilo' } },
 ]
 
+const readBasketCount = () => {
+  const items = JSON.parse(localStorage.getItem('basket') || '[]')
+  return items.reduce((s, i) => s + i.quantity, 0)
+}
+
 export default function BottomNav() {
-  const location = useNavigate()
   const navigate = useNavigate()
   const path = useLocation().pathname
-  const [basketCount, setBasketCount] = useState(0)
+  const [basketCount, setBasketCount] = useState(readBasketCount)
   const lang = localStorage.getItem('lang') || 'en'
 
-  const updateCount = () => {
-    const items = JSON.parse(localStorage.getItem('basket') || '[]')
-    setBasketCount(items.reduce((s, i) => s + i.quantity, 0))
-  }
+  const updateCount = () => setBasketCount(readBasketCount())
 
   useEffect(() => {
-    updateCount()
     window.addEventListener('basketUpdated', updateCount)
     window.addEventListener('storage', updateCount)
     return () => {
