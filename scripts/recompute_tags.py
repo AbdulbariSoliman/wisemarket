@@ -9,6 +9,7 @@
 #   python scripts/recompute_tags.py            # preview only, changes nothing
 #   python scripts/recompute_tags.py --apply    # write the new tags
 #   python scripts/recompute_tags.py --store open_food_facts --apply
+#   python scripts/recompute_tags.py --apply --allow-relax   # also loosen tags
 #   python scripts/recompute_tags.py --show 7610900027392 3017620422003
 #                                               # explain single products
 # ============================================================
@@ -29,11 +30,24 @@ load_dotenv(dotenv_path=ENV_FILE)
 PAGE = 500
 KEYS = ("vegan", "vegetarian", "halal", "gluten_free", "lactose_free", "palm_oil")
 
+# The "careful" value of each tag. Changing a tag TOWARDS this value is always
+# applied. Changing it AWAY from it (e.g. "not halal" -> "halal", "contains
+# gluten" -> "gluten-free") is only listed for review, unless --allow-relax,
+# because wrongly calling a product safe is the harmful mistake.
+SAFE_VALUE = {"vegan": False, "vegetarian": False, "halal": False,
+              "gluten_free": False, "lactose_free": False, "palm_oil": True}
+
+
+def is_relaxing(key: str, old, new) -> bool:
+    return old == SAFE_VALUE[key] and new != SAFE_VALUE[key]
+
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--apply", action="store_true", help="write changes (default: preview only)")
     ap.add_argument("--store", help="only this store, e.g. open_food_facts")
+    ap.add_argument("--allow-relax", action="store_true",
+                    help="also apply changes that loosen a tag (e.g. not halal -> halal)")
     ap.add_argument("--show", nargs="+", metavar="GTIN",
                     help="print ingredients and old/new tags for these products, change nothing")
     args = ap.parse_args()
@@ -43,6 +57,7 @@ def main() -> None:
         show(sb, args.show)
         return
     changes = collections.Counter()
+    held = collections.Counter()
     examples = collections.defaultdict(list)
     scanned = updated = 0
     offset = 0
@@ -67,23 +82,34 @@ def main() -> None:
             if not new:
                 continue
             old = row.get("ontology_tags") or {}
-            diff = {k: new[k] for k in KEYS if old.get(k) != new[k]}
-            if not diff:
-                continue
-            for k, v in diff.items():
-                change = f"{k}: {old.get(k)} -> {v}"
-                changes[change] += 1
+            diff = {}
+            for k in KEYS:
+                if old.get(k) == new[k]:
+                    continue
+                change = f"{k}: {old.get(k)} -> {new[k]}"
+                if is_relaxing(k, old.get(k), new[k]) and not args.allow_relax:
+                    held[change] += 1          # keep the old, careful value
+                else:
+                    diff[k] = new[k]
+                    changes[change] += 1
                 example = f"{row['gtin']} {(row.get('name_en') or '')[:35]}"
                 if len(examples[change]) < 3 and not any(e.startswith(row["gtin"]) for e in examples[change]):
                     examples[change].append(example)
+            if not diff:
+                continue
             if args.apply:
-                sb.table("products").update({"ontology_tags": {**old, **new}}).eq("id", row["id"]).execute()
+                sb.table("products").update({"ontology_tags": {**old, **diff}}).eq("id", row["id"]).execute()
             updated += 1
 
     mode = "UPDATED" if args.apply else "WOULD UPDATE (preview)"
     print(f"Scanned {scanned} products with ingredients — {mode}: {updated}")
     for change, n in changes.most_common():
         print(f"  {n:6}  {change:28}  e.g. " + "; ".join(examples[change]))
+    if held:
+        print("\nNOT applied - these would loosen a tag (check with --show, "
+              "apply with --allow-relax):")
+        for change, n in held.most_common():
+            print(f"  {n:6}  {change:28}  e.g. " + "; ".join(examples[change]))
     if not args.apply and updated:
         print("\nRun again with --apply to write these changes.")
 
