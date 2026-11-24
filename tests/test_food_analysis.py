@@ -282,3 +282,43 @@ def test_unsupported_language_is_left_unchanged():
 def test_chopped_fruit_is_not_minced_meat():
     v = analyse("abricots secs hachés, noisettes hachées grillées, amandes")
     assert v["vegetarian"] and v["vegan_likely"]
+
+
+# ── second production check ─────────────────────────────────────────
+
+def _tags(ingredients, category="other", name=None):
+    from backend.services.product_tags import tags_from_ingredients
+    return tags_from_ingredients(ingredients, category, name)
+
+
+@pytest.mark.parametrize("ingredients", [
+    "TRIGO integral (50%), chocolate con LECHE (azúcar, manteca de cacao, LECHE entera en polvo), sal",
+    "Sardinhas (peixe), Óleo de soja e Sal.",
+    "Složení: tekutá káva (cukr), MLÉČNÁ čokoláda (cukr, plnotučné sušené MLÉKO), LAKTÓZA",
+])
+def test_spanish_portuguese_czech_are_left_unchanged(ingredients):
+    assert _tags(ingredients) is None
+
+
+def test_seitan_is_gluten():
+    assert not _tags("SEITAN* 71 % (Wasser, WEIZENEIWEIß*), Zwiebeln, Speisesalz", "meat")["gluten_free"]
+
+
+def test_ble_without_accent_is_gluten():
+    assert not _tags("Sucre, farine de BLE, LAIT écrémé en poudre", "bakery")["gluten_free"]
+
+
+def test_bonite_and_italian_plural_are_fish():
+    assert not _tags("Bonite à ventre rayé (Katsuwonus pelamis), eau, sel", "fish")["vegetarian"]
+    assert not _tags("Sgombri, olio di oliva, sale.", "fish")["vegetarian"]
+
+
+def test_beer_in_product_name_is_alcohol():
+    assert not _tags("eau de source, malt d'orge, houblon", "beverages",
+                     "Hell Quöllfrisch Appenzeller Bier")["halal"]
+    assert _tags("Wasser, Gerstenmalz, Hopfen", "beverages", "Alkoholfreies Bier 0.0")["halal"]
+    assert _tags("Wasser, Zucker, Ingwer", "beverages", "Ginger Beer")["halal"]
+
+
+def test_sans_lactose_yogurt_is_lactose_free():
+    assert _tags("Yogourt partiellement écrémé, sans lactose, au lait pasteurisé, sucre", "dairy")["lactose_free"]

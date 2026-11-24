@@ -27,6 +27,7 @@ from backend.services.decision_engine import DecisionEngine
 from backend.services.ingredient_parser import IngredientParser
 from backend.services.ontology_matcher import OntologyMatcher
 from backend.services.ontology_router import OntologyRouter
+from backend.services.product_tags import apply_name_hints
 
 load_dotenv()
 
@@ -296,8 +297,7 @@ def analyze_product(
     try:
         groups  = app.state.router.route(category)
         matches = app.state.matcher.match(parsed_ingredients, groups)
-        if name and "halal" in str(name).lower() and not matches.get("halal_labels"):
-            matches["halal_labels"] = ["halal (product name)"]
+        matches = apply_name_hints(matches, name)
         verdicts = app.state.decision_engine.evaluate(matches, lang=lang)
     except Exception as e:
         logger.exception("Ontology pipeline failed for GTIN %s", gtin)

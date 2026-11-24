@@ -1,7 +1,7 @@
 term,en,de,fr,it
 fish,fish,Fisch,poisson,pesce
 salmon,salmon; atlantic salmon; smoked salmon,Lachs; Atlantischer Lachs; Räucherlachs,saumon; saumon atlantique; saumon fumé,salmone; salmone atlantico; salmone affumicato
-tuna,tuna; yellowfin; bluefin; albacore,Thunfisch; Gelbflossenthun,thon; thon jaune; thon blanc,tonno; tonno pinna gialla; tonno bianco
+tuna,tuna; yellowfin; bluefin; albacore; bonito; skipjack,Thunfisch; Gelbflossenthun; Bonito,thon; thon jaune; thon blanc; bonite; listao,tonno; tonno pinna gialla; tonno bianco; tonnetto; palamita
 cod,cod; bacalao; stockfish,Kabeljau; Dorsch; Stockfisch,cabillaud; morue; stockfish,merluzzo; baccalà; stoccafisso
 trout,trout; rainbow trout; lake trout,Forelle; Regenbogenforelle; Seeforelle,truite; truite arc-en-ciel,trota; trota arcobaleno; trota lacustre
 herring,herring; matjes,Hering; Matjes,hareng; matjes,aringa; matjes
@@ -14,4 +14,4 @@ tilapia,tilapia,Tilapia,tilapia,tilapia
 pangasius,pangasius; basa; swai,Pangasius; Basa,pangasius; basa,pangasio; basa
 sea_bass,sea bass; branzino,Wolfsbarsch; Branzino,bar; loup de mer; branzino,branzino; spigola
 sea_bream,sea bream; dorade,Dorade; Brassen,dorade; daurade,orata; dorata
-pollock,pollock; alaska pollock; coley; saithe; hake; haddock; plaice; trout; herring; sardine; anchovy; pangasius,Seelachs; Alaska-Seelachs; Pollack; Köhler; Seehecht; Schellfisch; Scholle; Seezunge; Forelle; Hering; Sardine; Sardelle; Pangasius; Egli; Felchen; Zander,colin; colin d'alaska; lieu noir; merlu; églefin; plie; truite; hareng; sardine; anchois; pangasius; féra; sandre,merluzzo d'alaska; nasello; eglefino; platessa; sogliola; trota; aringa; sardina; acciuga; pangasio; persico; lavarello
+pollock,pollock; alaska pollock; coley; saithe; hake; haddock; plaice; trout; herring; sardine; anchovy; pangasius,Seelachs; Alaska-Seelachs; Pollack; Köhler; Seehecht; Schellfisch; Scholle; Seezunge; Forelle; Hering; Sardine; Sardelle; Pangasius; Egli; Felchen; Zander,colin; colin d'alaska; lieu noir; merlu; églefin; plie; truite; hareng; sardine; anchois; pangasius; féra; sandre,merluzzo d'alaska; nasello; eglefino; platessa; sogliola; trota; aringa; sardina; acciuga; pangasio; persico; lavarello; sgombri; acciughe; alici; aringhe; trote; sardine

@@ -30,6 +30,28 @@ _DAIRY_WORDS = (
 )
 
 
+_ALCOHOL_NAME = re.compile(
+    r"\b(bier|beer|bière|biere|birra|lager|wein|wine|vin|vino|prosecco|champagne|"
+    r"cidre|cider|sidro|whisky|whiskey|vodka|rum|rhum|gin|likör|liqueur|liquore)\b")
+_ALCOHOL_FREE_NAME = re.compile(
+    r"alkoholfrei|sans alcool|alcohol[- ]free|non[- ]alcoholic|analcolic|senza alcol|"
+    r"\b0[.,]0\b|ginger|ingwer|root beer")
+
+
+def apply_name_hints(matches: Dict[str, list], name: Optional[str]) -> Dict[str, list]:
+    """Use the product name when the ingredient list is silent:
+    "Halal Chicken Breast" -> halal label, "Appenzeller Bier" -> alcohol."""
+    if not name:
+        return matches
+    low = str(name).lower()
+    if "halal" in low and not matches.get("halal_labels"):
+        matches["halal_labels"] = ["halal (product name)"]
+    if (_ALCOHOL_NAME.search(low) and not _ALCOHOL_FREE_NAME.search(low)
+            and not matches.get("alcohol")):
+        matches["alcohol"] = [f"{low} (product name)"]
+    return matches
+
+
 # Very common ingredient-list words in the four supported languages. If an
 # ingredient list contains none of them AND no ontology term matched, it is
 # probably in another language (e.g. Croatian) and we can't judge it.
@@ -41,12 +63,28 @@ _COMMON_WORDS = {
 }
 
 
+# Very common ingredient words in languages the ontology does NOT cover
+# (Spanish, Portuguese, Dutch, Nordic, Slavic, Turkish ...).
+_FOREIGN_WORDS = {
+    "leche", "harina", "azúcar", "azucar", "trigo", "aceite", "manteca", "huevo", "cebada",
+    "suero", "jarabe", "grasa", "agua", "y", "leite", "farinha", "açúcar", "óleo", "oleo",
+    "peixe", "ovo", "ovos", "água", "em", "sardinhas", "suiker", "tarwebloem", "melk",
+    "ingrediënten", "socker", "sukker", "mjölk", "mælk", "vetemjöl", "hvedemel", "cukr",
+    "mléko", "cukier", "mleko", "mąka", "skład", "složení", "šećer", "mlijeko", "brašno",
+    "şeker", "süt", "cukor", "tej", "liszt",
+}
+# Letters that do not occur in English, German, French or Italian
+_FOREIGN_LETTERS = set("ñãõčřěůłąęśźżőűşğıđćšžåøæ")
+
 _GERMAN_ENDINGS = ("öl", "mehl", "zucker", "salz", "milch", "wasser", "pulver", "extrakt")
 
 
 def _looks_supported(ingredients_raw: str, matches: Dict[str, list]) -> bool:
     """True if the list looks like English, German, French or Italian."""
     words = set(re.findall(r"[^\W\d_]+", ingredients_raw.lower()))
+    foreign = len(words & _FOREIGN_WORDS) + sum(1 for w in words if set(w) & _FOREIGN_LETTERS)
+    if foreign >= 2 and foreign >= len(words & _COMMON_WORDS):
+        return False
     if words & _COMMON_WORDS:
         return True
     if any(w.endswith(_GERMAN_ENDINGS) for w in words):
@@ -88,8 +126,7 @@ def tags_from_ingredients(ingredients_raw: str, category: Optional[str] = None,
     matches = matcher.match(parsed, router.route(category or ""))
     if not _looks_supported(ingredients_raw, matches):
         return None  # language not supported: keep the existing tags
-    if name and "halal" in name.lower() and not matches.get("halal_labels"):
-        matches["halal_labels"] = ["halal (product name)"]
+    matches = apply_name_hints(matches, name)
     v = engine.evaluate(matches)
 
     dairy_hits = [h for h in matches.get("animal_products", [])

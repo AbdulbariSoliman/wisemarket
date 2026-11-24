@@ -60,6 +60,8 @@ MEAT_GROUP_EXCEPTIONS = [
     "latte di pecora", "latte di capra", "latte di bufala", "formaggio di pecora", "formaggio di capra",
     "chicken egg", "hen's egg", "œuf de poule", "oeuf de poule", "hühnerei", "uovo di gallina",
 ]
+# Plant look-alikes must not hide a gluten source
+NO_EXCEPTION_GROUPS = {"coeliac_triggers"}
 MEAT_GROUPS = {"meat", "pork", "fish_synonyms", "shellfish_synonyms"}
 
 # Groups where a hit means "the product CONTAINS this". For these groups,
@@ -174,6 +176,8 @@ class OntologyMatcher:
     # ── matching ───────────────────────────────────────────────
 
     def _strip_exceptions(self, text: str, group: str = "") -> str:
+        if group in NO_EXCEPTION_GROUPS:
+            return text  # "Weizeneiweiß" is plant-based, but it IS gluten
         phrases = self._exceptions
         if group in MEAT_GROUPS:
             phrases = self._meat_exceptions + self._exceptions
