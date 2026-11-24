@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Mic, ScanLine, Send, X } from 'lucide-react'
 import { api } from '../api/client'
-import { useBasket } from '../hooks/useBasket'
 import { getSeasonalContext, getGreeting } from '../data/seasonal'
 import { track } from '../hooks/useTracking'
 
@@ -20,7 +19,6 @@ const DINNERS = [
 
 export default function Home() {
   const navigate = useNavigate()
-  const { addProduct } = useBasket()
   const lang = localStorage.getItem('lang') || 'en'
   const inputRef = useRef()
 
@@ -33,11 +31,11 @@ export default function Home() {
 
   const seasonal = (() => {
     try { return getSeasonalContext(lang) }
-    catch(e) { return { banner: null, bannerIcon: null, suggestions: [], seasonalProduce: [], event: null } }
+    catch { return { banner: null, bannerIcon: null, suggestions: [], seasonalProduce: [], event: null } }
   })()
   const greeting = (() => {
     try { return getGreeting(lang) }
-    catch(e) { return 'Welcome 👋' }
+    catch { return 'Welcome 👋' }
   })()
   const isGtin   = /^\d{8,14}$/.test(query.trim())
   const dinner   = DINNERS[new Date().getDay() % DINNERS.length]
@@ -45,11 +43,14 @@ export default function Home() {
   // Load promotions
   useEffect(() => {
     api.promotions({ limit: 3, lang }).then(d => setPromotions(d.promotions || [])).catch(() => {})
-  }, [])
+  }, [lang])
 
   // Search as user types
   useEffect(() => {
-    if (!query.trim() || isGtin) { setResults([]); return }
+    if (!query.trim() || isGtin) {
+      const clear = setTimeout(() => setResults([]), 0)
+      return () => clearTimeout(clear)
+    }
     const t = setTimeout(async () => {
       setLoading(true)
       try {
@@ -63,13 +64,7 @@ export default function Home() {
       }
     }, 300)
     return () => clearTimeout(t)
-  }, [query])
-
-  const handleAdd = (product) => {
-    track('add', { gtin: product.gtin, name: product.name, store: product.store })
-    addProduct(product)
-    navigate('/basket')
-  }
+  }, [query, isGtin, lang])
 
   const startVoice = () => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition

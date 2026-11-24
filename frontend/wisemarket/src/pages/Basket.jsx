@@ -28,13 +28,14 @@ function NutritionBar({ label, value, unit, max, color }) {
 
 export default function Basket() {
   const navigate = useNavigate()
-  const { items, setItems, addProduct: addToBasket, removeProduct, updateQuantity } = useBasket()
+  const { items, addProduct: addToBasket, removeProduct, updateQuantity } = useBasket()
   const [mode, setMode]         = useState('mix')
   const [store, setStore]       = useState('migros')
   const [data, setData]         = useState(null)
   const [nutrition, setNutrition] = useState(null)
   const [loading, setLoading]   = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState('')
   const [budget, setBudget]         = useState(() => parseFloat(localStorage.getItem('budget') || '0'))
   const [showBudget, setShowBudget] = useState(false)
   const [budgetInput, setBudgetInput] = useState('')
@@ -42,11 +43,6 @@ export default function Basket() {
   const [searchResults, setSearchResults] = useState([])
   const [searching, setSearching] = useState(false)
   const lang = localStorage.getItem('lang') || 'en'
-
-  useEffect(() => {
-    if (items.length > 0) calculate()
-    else { setData(null); setNutrition(null) }
-  }, [items])
 
   // Search products to add
   useEffect(() => {
@@ -62,10 +58,12 @@ export default function Basket() {
           seen.add(p.gtin); return true
         })
         setSearchResults(unique)
-      } catch(e) {} finally { setSearching(false) }
+      } catch (e) {
+        console.warn('Basket search failed:', e)
+      } finally { setSearching(false) }
     }, 300)
     return () => clearTimeout(t)
-  }, [search])
+  }, [search, lang])
 
   const calculate = useCallback(async () => {
     if (!items.length) return
@@ -81,6 +79,16 @@ export default function Basket() {
     finally { setLoading(false) }
   }, [items, lang])
 
+  // Recalculate prices whenever the basket changes
+  useEffect(() => {
+    if (items.length > 0) {
+      calculate()
+      return
+    }
+    const reset = setTimeout(() => { setData(null); setNutrition(null) }, 0)
+    return () => clearTimeout(reset)
+  }, [items, calculate])
+
   const addProduct = (p) => {
     addToBasket(p)
     setSearch('')
@@ -92,9 +100,13 @@ export default function Basket() {
 
   const exportPDF = async () => {
     setExporting(true)
+    setExportError('')
     try {
       await api.exportPDF({ items, lang, qr_url: 'https://wisemarket.ch' })
-    } catch(e) {} finally { setExporting(false) }
+    } catch (e) {
+      console.error('PDF export failed:', e)
+      setExportError('Could not create the PDF. Please try again.')
+    } finally { setExporting(false) }
   }
 
   // ── Compute display data ──────────────────────────────────
@@ -182,6 +194,12 @@ export default function Basket() {
         <input value={search} onChange={e => setSearch(e.target.value)}
           placeholder="Search products to add..."
           style={{ paddingLeft: 42, borderRadius: 12 }} />
+        {searching && (
+          <span style={{
+            position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)',
+            fontSize: 11, color: 'var(--muted)',
+          }}>Searching…</span>
+        )}
 
         {/* Search dropdown */}
         {searchResults.length > 0 && (
@@ -408,8 +426,8 @@ export default function Basket() {
                     }
                   </p>
                 </div>
-                <span style={{ fontFamily: 'Syne', fontSize: 20, fontWeight: 800 }}>
-                  CHF {total.toFixed(2)}
+                <span style={{ fontFamily: 'Syne', fontSize: 20, fontWeight: 800, opacity: loading ? 0.5 : 1 }}>
+                  {loading ? 'Updating…' : `CHF ${total.toFixed(2)}`}
                 </span>
               </div>
 
@@ -448,6 +466,9 @@ export default function Basket() {
             <Download size={16} />
             {exporting ? 'Generating...' : 'Export Shopping List PDF'}
           </button>
+          {exportError && (
+            <p style={{ margin: '8px 0 0', fontSize: 12, color: '#f87171', textAlign: 'center' }}>{exportError}</p>
+          )}
         </>
       )}
     </div>

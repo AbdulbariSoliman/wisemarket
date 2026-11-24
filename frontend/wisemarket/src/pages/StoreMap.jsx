@@ -21,13 +21,11 @@ function dist(lat1,lon1,lat2,lon2) {
 export default function StoreMap() {
   const navigate = useNavigate()
   const [stores, setStores]   = useState([])
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError]     = useState('')
   const [selected, setSelected] = useState(null)
 
-  const find = () => {
-    setLoading(true)
-    setError('')
+  const locate = () => {
     navigator.geolocation.getCurrentPosition(
       async pos => {
         const {latitude:lat, longitude:lon} = pos.coords
@@ -51,7 +49,7 @@ export default function StoreMap() {
             .sort((a,b)=>a.distance-b.distance)
             .slice(0,15)
           setStores(results)
-        } catch(e) { setError('Could not load nearby stores.') }
+        } catch { setError('Could not load nearby stores.') }
         setLoading(false)
       },
       () => { setError('Location access denied.'); setLoading(false) },
@@ -59,7 +57,13 @@ export default function StoreMap() {
     )
   }
 
-  useEffect(() => { find() }, [])
+  const find = () => {
+    setLoading(true)
+    setError('')
+    locate()
+  }
+
+  useEffect(() => { locate() }, [])
 
   const fmt = m => m < 1000 ? `${m}m` : `${(m/1000).toFixed(1)}km`
 

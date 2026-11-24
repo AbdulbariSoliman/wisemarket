@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Search as SearchIcon, X, Send, Mic } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
@@ -38,26 +38,7 @@ export default function Search() {
   // Auto-detect GTIN
   const isGtin = GTIN_RE.test(query.trim())
 
-  useEffect(() => {
-    if (mode === 'chat') return
-    if (isGtin) {
-      // Direct GTIN lookup
-      navigate(`/product/${query.trim()}`)
-      return
-    }
-    const t = setTimeout(() => doSearch(), 350)
-    return () => clearTimeout(t)
-  }, [query, active, mode])
-
-  useEffect(() => {
-    doSearch('', {})
-  }, [])
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
-
-  const doSearch = async (q = query, filters = active) => {
+  const doSearch = useCallback(async (q, filters) => {
     if (mode === 'chat') return
     setLoading(true)
     try {
@@ -68,7 +49,23 @@ export default function Search() {
       setTotal(data.count || 0)
     } catch(e) { console.error(e) }
     finally { setLoading(false) }
-  }
+  }, [mode, lang])
+
+  // Search as the user types or changes filters (also runs once on first load)
+  useEffect(() => {
+    if (mode === 'chat') return
+    if (isGtin) {
+      // Direct GTIN lookup
+      navigate(`/product/${query.trim()}`)
+      return
+    }
+    const t = setTimeout(() => doSearch(query, active), 350)
+    return () => clearTimeout(t)
+  }, [query, active, mode, isGtin, navigate, doSearch])
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
 
   const sendChat = async (text) => {
     if (!text.trim()) return
@@ -82,7 +79,7 @@ export default function Search() {
         role: 'assistant', text: res.response,
         products: res.products, intent: res.intent,
       }])
-    } catch(e) {
+    } catch {
       setMessages(m => [...m, { role: 'assistant', text: 'Something went wrong.' }])
     } finally { setChatLoading(false) }
   }

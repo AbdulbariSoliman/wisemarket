@@ -88,8 +88,11 @@ export default function Product() {
       setStores(p.stores || [])
       setPrices(c)
       setNutrition(n)
+    }).catch(e => {
+      console.error('Product load failed:', e)
+      setStores([])
     }).finally(() => setLoading(false))
-  }, [gtin])
+  }, [gtin, lang])
 
   if (loading) return (
     <div style={{ padding: 20 }}>

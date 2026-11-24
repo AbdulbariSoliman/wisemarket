@@ -32,7 +32,7 @@ export default function Chat() {
         products: res.products || [],
         intent: res.intent,
       }])
-    } catch (e) {
+    } catch {
       setMessages(m => [...m, { role: 'assistant', text: 'Something went wrong. Please try again.' }])
     } finally {
       setLoading(false)

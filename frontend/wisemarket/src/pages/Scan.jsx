@@ -20,13 +20,13 @@ export default function Scan() {
     setError('')
     readerRef.current = new BrowserMultiFormatReader()
     try {
-      await readerRef.current.decodeFromVideoDevice(null, videoRef.current, (res, err) => {
+      await readerRef.current.decodeFromVideoDevice(null, videoRef.current, (res) => {
         if (res) {
           stopScan()
           lookup(res.getText())
         }
       })
-    } catch (e) {
+    } catch {
       setError('Camera access denied. Please allow camera or enter GTIN manually.')
       setScanning(false)
     }
