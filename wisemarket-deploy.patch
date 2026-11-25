@@ -1,0 +1,314 @@
+diff --git a/.dockerignore b/.dockerignore
+index 98396c0..45561e5 100644
+--- a/.dockerignore
++++ b/.dockerignore
+@@ -1,8 +1,15 @@
++.git
++.github
++.env
+ .venv
+ venv
+-__pycache__
++**/__pycache__
++**/*.pyc
+ .pytest_cache
+-.git
+-.env
+-*.pyc
+-*.pyo
++.ruff_cache
++**/node_modules
++frontend/wisemarket/dist
++docs
++tests
++scripts
++*.patch
+diff --git a/Dockerfile b/Dockerfile
+index 5accb9e..efd9915 100644
+--- a/Dockerfile
++++ b/Dockerfile
+@@ -1,16 +1,25 @@
+-FROM python:3.12-slim
++# ── 1. Build the React app ───────────────────────────────────
++FROM node:22-slim AS web
++WORKDIR /web
++COPY frontend/wisemarket/package.json frontend/wisemarket/package-lock.json ./
++RUN npm ci --no-audit --no-fund
++COPY frontend/wisemarket/ ./
++RUN npm run build
+ 
++# ── 2. Python API that also serves the built app ─────────────
++FROM python:3.12-slim
+ WORKDIR /app
++ENV PYTHONDONTWRITEBYTECODE=1 \
++    PYTHONUNBUFFERED=1 \
++    PORT=8000
+ 
+-# Install dependencies
+ COPY requirements.txt .
+ RUN pip install --no-cache-dir -r requirements.txt
+ 
+-# Copy app
+-COPY . .
++COPY backend ./backend
++COPY data/ontology ./data/ontology
++COPY --from=web /web/dist ./frontend/wisemarket/dist
+ 
+-# Expose port
+ EXPOSE 8000
+-
+-# Start server
+-CMD ["uvicorn", "backend.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
++# Hosting platforms set $PORT; --proxy-headers keeps real client IPs for rate limiting
++CMD uvicorn backend.api.serve:app --host 0.0.0.0 --port ${PORT} --proxy-headers --forwarded-allow-ips="*"
+diff --git a/README.md b/README.md
+index 4bde7b6..5621309 100644
+--- a/README.md
++++ b/README.md
+@@ -4,7 +4,7 @@
+ 
+ <p align="center">
+   <a href="https://github.com/AbdulbariSoliman/wisemarket/actions/workflows/ci.yml"><img src="https://github.com/AbdulbariSoliman/wisemarket/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+-  <img src="https://img.shields.io/badge/tests-222-brightgreen" alt="222 tests">
++  <img src="https://img.shields.io/badge/tests-227-brightgreen" alt="227 tests">
+   <img src="https://img.shields.io/badge/Python-3.11–3.13-3776AB?logo=python&logoColor=white" alt="Python">
+   <img src="https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white" alt="FastAPI">
+   <img src="https://img.shields.io/badge/React_19-61DAFB?logo=react&logoColor=black" alt="React">
+@@ -25,7 +25,7 @@ Search or scan a product, compare its price across stores, see at a glance wheth
+ - 🎯 **Measured accuracy.** False "vegan" claims fell from 19 to 0 on 100 real products, and 7,255 products were corrected in the live catalogue.
+ - 🤖 **AI agent grounded in data.** The LLM detects intent and writes the answer, but every price and product comes from Postgres.
+ - 🛡️ **Safety first.** Automated re-tagging can only make a tag stricter; "this is safe" changes go to human review.
+-- ✅ **Tested.** 222 tests, and CI runs integration tests against a fresh Supabase instance on every push.
++- ✅ **Tested.** 227 tests, and CI runs integration tests against a fresh Supabase instance on every push.
+ 
+ ---
+ 
+@@ -262,6 +262,23 @@ python -m backend.etl.ingest_open_food_facts
+ python scripts/recompute_tags.py               # preview; add --apply to write
+ ```
+ 
++### Deploy (one service, free)
++
++The `Dockerfile` builds the React app and serves it together with the API from one container: the app at `/`, the API at `/api`. There is one URL and no CORS setup.
++
++1. On [render.com](https://render.com): **New → Blueprint** → connect this repository (it reads `render.yaml`).
++2. Enter `SUPABASE_URL`, `SUPABASE_KEY` and, optionally, `GROQ_API_KEY` when asked.
++3. Deploy. The app runs at `https://<service-name>.onrender.com`, with the API docs at `/api/docs`.
++
++On the free plan the service sleeps after 15 minutes without visitors; the first visit after that takes about a minute.
++
++Run the same production setup locally:
++
++```bash
++cd frontend/wisemarket && npm run build && cd ../..
++uvicorn backend.api.serve:app --port 8000      # app + API on http://localhost:8000
++```
++
+ > 🔐 Keep `.env` out of git (it is in `.gitignore`). Never put the Supabase `service_role` key in frontend code.
+ 
+ ---
+@@ -270,7 +287,7 @@ python scripts/recompute_tags.py               # preview; add --apply to write
+ 
+ | Suite | Command | Tests |
+ |---|---|---|
+-| Logic (no database) | `pytest -m "not integration"` | 178 |
++| Logic (no database) | `pytest -m "not integration"` | 183 |
+ | Integration (real API + Postgres) | `pytest -m integration` | 44 |
+ | Frontend | `npm run lint && npm run build` | ESLint + Vite build |
+ 
+@@ -288,7 +305,7 @@ The logic suite includes **real product cases** taken from Open Food Facts: scan
+ ```
+ wisemarket/
+ ├── backend/
+-│   ├── api/            FastAPI app, routes, DB client, central error handling
++│   ├── api/            FastAPI app, routes, DB client, error handling, serve.py (production)
+ │   ├── services/       agent, LLM client, parser, router, matcher, decision engine, product tags
+ │   ├── etl/            Open Food Facts ingest, Migros scraper, GTIN merge
+ │   ├── normalizer/     ontology loader
+@@ -296,8 +313,10 @@ wisemarket/
+ ├── data/ontology/      67 multilingual CSV word lists (en/de/fr/it)
+ ├── frontend/wisemarket React 19 + Vite PWA
+ ├── scripts/            recompute_tags.py, check_connection.py
+-├── tests/              222 tests (logic + integration)
+-└── docs/               APP_GUIDE.md, BUILD_LOG.md, screenshots/
++├── tests/              227 tests (logic + integration)
++├── docs/               APP_GUIDE.md, BUILD_LOG.md, screenshots/
++├── Dockerfile          builds the app and the API into one container
++└── render.yaml         one-click deploy on Render
+ ```
+ 
+ ### Tech stack
+@@ -309,7 +328,7 @@ wisemarket/
+ | AI | LiteLLM → Groq (`llama-3.1-8b-instant`, `llama-3.3-70b-versatile`) |
+ | Data | Supabase Postgres, PostgREST, SQL migrations |
+ | ETL | Playwright (Migros), Open Food Facts API, GTIN merge |
+-| Quality | pytest (222 tests), ESLint, GitHub Actions with a local Supabase |
++| Quality | pytest (227 tests), ESLint, GitHub Actions with a local Supabase |
+ 
+ ---
+ 
+diff --git a/backend/api/serve.py b/backend/api/serve.py
+new file mode 100644
+index 0000000..4331a8d
+--- /dev/null
++++ b/backend/api/serve.py
+@@ -0,0 +1,50 @@
++"""
++Production entry point: one service for the whole app.
++
++    /api/...   -> the FastAPI backend (backend.api.main)
++    /...       -> the built React app (frontend/wisemarket/dist),
++                  with index.html for every client-side route
++
++Same origin for both, so no CORS setup and only one URL to share.
++
++    uvicorn backend.api.serve:app --host 0.0.0.0 --port 8000
++"""
++import os
++from contextlib import asynccontextmanager
++from pathlib import Path
++
++from fastapi import FastAPI, HTTPException
++from fastapi.responses import FileResponse
++
++from backend.api.main import app as api
++
++DIST = Path(os.environ.get("FRONTEND_DIST", "frontend/wisemarket/dist")).resolve()
++
++
++@asynccontextmanager
++async def lifespan(_: FastAPI):
++    # Mounted apps don't run their own startup, so run the API's here
++    async with api.router.lifespan_context(api):
++        yield
++
++
++app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
++app.mount("/api", api)
++
++
++@app.get("/health", include_in_schema=False)
++def health():
++    return {"status": "ok"}
++
++
++@app.get("/{path:path}", include_in_schema=False)
++def frontend(path: str):
++    index = DIST / "index.html"
++    if not index.is_file():
++        raise HTTPException(503, "Frontend not built: run `npm run build` in frontend/wisemarket")
++    file = (DIST / path).resolve()
++    if path and file.is_file() and DIST in file.parents:
++        headers = {"Cache-Control": "public, max-age=31536000, immutable"} if path.startswith("assets/") else None
++        return FileResponse(file, headers=headers)
++    # client-side routes (/product/123, /basket ...) and unknown paths
++    return FileResponse(index, headers={"Cache-Control": "no-cache"})
+diff --git a/frontend/wisemarket/public/sw.js b/frontend/wisemarket/public/sw.js
+index 6a59dd1..04508d0 100644
+--- a/frontend/wisemarket/public/sw.js
++++ b/frontend/wisemarket/public/sw.js
+@@ -1,4 +1,4 @@
+-const CACHE = 'wisemarket-v1'
++const CACHE = 'wisemarket-v2'
+ const STATIC = [
+   '/',
+   '/index.html',
+@@ -35,7 +35,23 @@ self.addEventListener('fetch', e => {
+     return
+   }
+ 
+-  // Cache first for static assets
++  // Only GET requests can be cached
++  if (e.request.method !== 'GET') return
++
++  // Network first for pages, so a new deploy is picked up straight away
++  // (a cached index.html would point to old, deleted asset files)
++  if (e.request.mode === 'navigate') {
++    e.respondWith(
++      fetch(e.request).then(resp => {
++        const clone = resp.clone()
++        caches.open(CACHE).then(c => c.put('/index.html', clone))
++        return resp
++      }).catch(() => caches.match('/index.html'))
++    )
++    return
++  }
++
++  // Cache first for static assets (their file names change on every build)
+   e.respondWith(
+     caches.match(e.request).then(cached => {
+       if (cached) return cached
+diff --git a/render.yaml b/render.yaml
+new file mode 100644
+index 0000000..74b25d7
+--- /dev/null
++++ b/render.yaml
+@@ -0,0 +1,17 @@
++# Render Blueprint: one free web service that runs the API and serves the app.
++# Render → New → Blueprint → pick this repo. Secrets are typed into Render, not stored here.
++services:
++  - type: web
++    name: wisemarket
++    runtime: docker
++    plan: free
++    region: frankfurt
++    healthCheckPath: /health
++    autoDeploy: true
++    envVars:
++      - key: SUPABASE_URL
++        sync: false        # https://<project>.supabase.co
++      - key: SUPABASE_KEY
++        sync: false        # service_role key (Legacy API Keys tab)
++      - key: GROQ_API_KEY
++        sync: false        # optional, only needed for the chat
+diff --git a/tests/test_serve.py b/tests/test_serve.py
+new file mode 100644
+index 0000000..59f3921
+--- /dev/null
++++ b/tests/test_serve.py
+@@ -0,0 +1,45 @@
++"""Production entry point: React app at /, API at /api (backend/api/serve.py)."""
++import importlib
++
++import pytest
++from fastapi.testclient import TestClient
++
++
++@pytest.fixture()
++def client(tmp_path, monkeypatch):
++    dist = tmp_path / "dist"
++    (dist / "assets").mkdir(parents=True)
++    (dist / "index.html").write_text("<html>WiseMarket</html>")
++    (dist / "assets" / "app-123.js").write_text("console.log(1)")
++    (tmp_path / "secret.txt").write_text("do not serve")
++    monkeypatch.setenv("FRONTEND_DIST", str(dist))
++    import backend.api.serve as serve
++    serve = importlib.reload(serve)
++    with TestClient(serve.app) as c:
++        yield c
++
++
++def test_health(client):
++    assert client.get("/health").json() == {"status": "ok"}
++
++
++def test_api_is_mounted_under_api(client):
++    r = client.get("/api/")
++    assert r.status_code == 200 and "application/json" in r.headers["content-type"]
++
++
++def test_client_side_routes_get_index_html(client):
++    for path in ("/", "/product/3017620422003", "/basket"):
++        r = client.get(path)
++        assert r.status_code == 200 and "WiseMarket" in r.text
++
++
++def test_assets_are_served_with_long_cache(client):
++    r = client.get("/assets/app-123.js")
++    assert r.text == "console.log(1)"
++    assert "immutable" in r.headers["cache-control"]
++
++
++def test_no_files_outside_dist(client):
++    r = client.get("/..%2Fsecret.txt")
++    assert "do not serve" not in r.text
