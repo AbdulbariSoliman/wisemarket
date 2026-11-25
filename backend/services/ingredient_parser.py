@@ -1,3 +1,4 @@
+import html
 import re
 from typing import List
 
@@ -38,7 +39,7 @@ class IngredientParser:
         )
         self.trace_pattern = TRACE_PATTERN
         self.junk_pattern = re.compile(
-            r"\d+\s?(%|g|kg|mg|ml|l|cl|dl)",
+            r"[<>≤≥~]?\d+(?:[.,]\d+)?\s?(?:%|(?:g|kg|mg|ml|l|cl|dl)\b)",
             re.IGNORECASE,
         )
 
@@ -118,12 +119,16 @@ class IngredientParser:
         if not raw_text or not raw_text.strip():
             return []
 
+        # Some sources store HTML entities ("&lt;1% son de blé")
+        raw_text = html.unescape(raw_text)
         # Open Food Facts marks allergens like _blé_ / _milk_
         raw_text = raw_text.replace("_", " ")
         # OCR often reads a lower-case "l" as a capital "I" ("SeeIachsfiIet")
         raw_text = re.sub(r"(?<=[a-zäöüßéèàç])I(?=[a-zäöüßéèàç])", "l", raw_text)
         # "œuf" and "oeuf" are the same word
         raw_text = raw_text.replace("œ", "oe").replace("Œ", "Oe")
+        # Decimal commas ("7,4%") are numbers, not list separators
+        raw_text = re.sub(r"(?<=\d),(?=\d)", ".", raw_text)
 
         # Keep a "may contain ..." statement as ONE item, so it can be
         # recognised as a trace warning instead of real ingredients.

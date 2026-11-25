@@ -322,3 +322,8 @@ def test_beer_in_product_name_is_alcohol():
 
 def test_sans_lactose_yogurt_is_lactose_free():
     assert _tags("Yogourt partiellement écrémé, sans lactose, au lait pasteurisé, sucre", "dairy")["lactose_free"]
+
+
+def test_decimal_commas_and_html_entities_are_cleaned():
+    parsed = PARSER.normalize("cacao maigre 7,4%, LAIT écrémé en poudre 6,6%, &lt;1% son de blé, sel 0,5 g")
+    assert parsed == ["cacao maigre", "lait écrémé en poudre", "son de blé", "sel"]

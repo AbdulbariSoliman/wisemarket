@@ -33,6 +33,7 @@ const ALL_BADGES = {
   keto:            { label: 'Keto',              icon: '🥑',  bg: '#1a2d00', color: '#bef264' },
   has_caffeine:    { label: 'Contains Caffeine', icon: '☕',  bg: '#1a0d00', color: '#fdba74' },
   has_palm_oil:    { label: 'Palm Oil',          icon: '🌴',  bg: '#1a1000', color: '#fcd34d' },
+  palm_oil:        { label: 'Palm Oil',          icon: '🌴',  bg: '#1a1000', color: '#fcd34d' },
   allergen_warning:{ label: 'Allergens',         icon: '⚠️',  bg: '#2d0d0d', color: '#f87171' },
   is_kids_friendly:{ label: 'Kids Friendly',     icon: '👶',  bg: '#1a1000', color: '#fde68a' },
   is_sports:       { label: 'Sports',            icon: '🏋️',  bg: '#0d0d2d', color: '#a5b4fc' },

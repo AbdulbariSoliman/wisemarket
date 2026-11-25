@@ -1,16 +1,47 @@
-# React + Vite
+# WiseMarket: frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Mobile-first **React 19 + Vite** progressive web app for [WiseMarket](../../README.md).
 
-Currently, two official plugins are available:
+## Run it
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+```bash
+npm install
+npm run dev        # http://localhost:5173
+```
 
-## React Compiler
+The dev server forwards `/api/*` to the FastAPI backend on `http://localhost:8000` (see `vite.config.js`), so start the backend first. To point at another backend, set `VITE_API_URL`:
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```bash
+VITE_API_URL=https://your-api.example.com npm run build
+```
 
-## Expanding the ESLint configuration
+| Command | What it does |
+|---|---|
+| `npm run dev` | Development server with hot reload |
+| `npm run lint` | ESLint (React + hooks rules) |
+| `npm run build` | Production build into `dist/` |
+| `npm run preview` | Serve the production build locally |
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Structure
+
+```
+src/
+├── api/client.js        all backend calls in one place
+├── pages/               one file per screen (Home, Search, Product, Basket, Scan,
+│                        Chat, StoreMap, Profile, Settings, Onboarding, RecipeView)
+├── components/          BottomNav, ProductCard, PriceBar
+├── hooks/               useBasket (basket in localStorage), useTracking
+└── data/                recipes and seasonal produce (static)
+public/
+├── manifest.json, sw.js PWA install + offline shell
+```
+
+## Notes
+
+- **No account needed.** Language, theme, dietary preferences and the basket are stored in `localStorage` on the device.
+- **4 languages:** English, Deutsch, Français, Italiano.
+- **Barcode scanning** uses `@zxing/library` with the device camera. Products can also be opened by typing a GTIN.
+- **Voice input** (search and chat) uses the browser's Web Speech API, where available.
+- **Nearby stores** queries the public OpenStreetMap Overpass API directly from the browser.
+
+Screens and what each one does: [docs/APP_GUIDE.md](../../docs/APP_GUIDE.md).
