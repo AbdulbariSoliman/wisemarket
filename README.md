@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="https://github.com/AbdulbariSoliman/wisemarket/actions/workflows/ci.yml"><img src="https://github.com/AbdulbariSoliman/wisemarket/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <img src="https://img.shields.io/badge/tests-222-brightgreen" alt="222 tests">
+  <img src="https://img.shields.io/badge/tests-227-brightgreen" alt="227 tests">
   <img src="https://img.shields.io/badge/Python-3.11–3.13-3776AB?logo=python&logoColor=white" alt="Python">
   <img src="https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white" alt="FastAPI">
   <img src="https://img.shields.io/badge/React_19-61DAFB?logo=react&logoColor=black" alt="React">
@@ -25,7 +25,7 @@ Search or scan a product, compare its price across stores, see at a glance wheth
 - 🎯 **Measured accuracy.** False "vegan" claims fell from 19 to 0 on 100 real products, and 7,255 products were corrected in the live catalogue.
 - 🤖 **AI agent grounded in data.** The LLM detects intent and writes the answer, but every price and product comes from Postgres.
 - 🛡️ **Safety first.** Automated re-tagging can only make a tag stricter; "this is safe" changes go to human review.
-- ✅ **Tested.** 222 tests, and CI runs integration tests against a fresh Supabase instance on every push.
+- ✅ **Tested.** 227 tests, and CI runs integration tests against a fresh Supabase instance on every push.
 
 ---
 
@@ -262,6 +262,23 @@ python -m backend.etl.ingest_open_food_facts
 python scripts/recompute_tags.py               # preview; add --apply to write
 ```
 
+### Deploy (one service, free)
+
+The `Dockerfile` builds the React app and serves it together with the API from one container: the app at `/`, the API at `/api`. There is one URL and no CORS setup.
+
+1. On [render.com](https://render.com): **New → Blueprint** → connect this repository (it reads `render.yaml`).
+2. Enter `SUPABASE_URL`, `SUPABASE_KEY` and, optionally, `GROQ_API_KEY` when asked.
+3. Deploy. The app runs at `https://<service-name>.onrender.com`, with the API docs at `/api/docs`.
+
+On the free plan the service sleeps after 15 minutes without visitors; the first visit after that takes about a minute.
+
+Run the same production setup locally:
+
+```bash
+cd frontend/wisemarket && npm run build && cd ../..
+uvicorn backend.api.serve:app --port 8000      # app + API on http://localhost:8000
+```
+
 > 🔐 Keep `.env` out of git (it is in `.gitignore`). Never put the Supabase `service_role` key in frontend code.
 
 ---
@@ -270,7 +287,7 @@ python scripts/recompute_tags.py               # preview; add --apply to write
 
 | Suite | Command | Tests |
 |---|---|---|
-| Logic (no database) | `pytest -m "not integration"` | 178 |
+| Logic (no database) | `pytest -m "not integration"` | 183 |
 | Integration (real API + Postgres) | `pytest -m integration` | 44 |
 | Frontend | `npm run lint && npm run build` | ESLint + Vite build |
 
@@ -288,7 +305,7 @@ The logic suite includes **real product cases** taken from Open Food Facts: scan
 ```
 wisemarket/
 ├── backend/
-│   ├── api/            FastAPI app, routes, DB client, central error handling
+│   ├── api/            FastAPI app, routes, DB client, error handling, serve.py (production)
 │   ├── services/       agent, LLM client, parser, router, matcher, decision engine, product tags
 │   ├── etl/            Open Food Facts ingest, Migros scraper, GTIN merge
 │   ├── normalizer/     ontology loader
@@ -296,8 +313,10 @@ wisemarket/
 ├── data/ontology/      67 multilingual CSV word lists (en/de/fr/it)
 ├── frontend/wisemarket React 19 + Vite PWA
 ├── scripts/            recompute_tags.py, check_connection.py
-├── tests/              222 tests (logic + integration)
-└── docs/               APP_GUIDE.md, BUILD_LOG.md, screenshots/
+├── tests/              227 tests (logic + integration)
+├── docs/               APP_GUIDE.md, BUILD_LOG.md, screenshots/
+├── Dockerfile          builds the app and the API into one container
+└── render.yaml         one-click deploy on Render
 ```
 
 ### Tech stack
@@ -309,7 +328,7 @@ wisemarket/
 | AI | LiteLLM → Groq (`llama-3.1-8b-instant`, `llama-3.3-70b-versatile`) |
 | Data | Supabase Postgres, PostgREST, SQL migrations |
 | ETL | Playwright (Migros), Open Food Facts API, GTIN merge |
-| Quality | pytest (222 tests), ESLint, GitHub Actions with a local Supabase |
+| Quality | pytest (227 tests), ESLint, GitHub Actions with a local Supabase |
 
 ---
 

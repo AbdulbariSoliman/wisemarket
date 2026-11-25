@@ -1,0 +1,17 @@
+# Render Blueprint: one free web service that runs the API and serves the app.
+# Render → New → Blueprint → pick this repo. Secrets are typed into Render, not stored here.
+services:
+  - type: web
+    name: wisemarket
+    runtime: docker
+    plan: free
+    region: frankfurt
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: SUPABASE_URL
+        sync: false        # https://<project>.supabase.co
+      - key: SUPABASE_KEY
+        sync: false        # service_role key (Legacy API Keys tab)
+      - key: GROQ_API_KEY
+        sync: false        # optional, only needed for the chat

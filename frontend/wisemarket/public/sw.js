@@ -1,4 +1,4 @@
-const CACHE = 'wisemarket-v1'
+const CACHE = 'wisemarket-v2'
 const STATIC = [
   '/',
   '/index.html',
@@ -35,7 +35,23 @@ self.addEventListener('fetch', e => {
     return
   }
 
-  // Cache first for static assets
+  // Only GET requests can be cached
+  if (e.request.method !== 'GET') return
+
+  // Network first for pages, so a new deploy is picked up straight away
+  // (a cached index.html would point to old, deleted asset files)
+  if (e.request.mode === 'navigate') {
+    e.respondWith(
+      fetch(e.request).then(resp => {
+        const clone = resp.clone()
+        caches.open(CACHE).then(c => c.put('/index.html', clone))
+        return resp
+      }).catch(() => caches.match('/index.html'))
+    )
+    return
+  }
+
+  // Cache first for static assets (their file names change on every build)
   e.respondWith(
     caches.match(e.request).then(cached => {
       if (cached) return cached
