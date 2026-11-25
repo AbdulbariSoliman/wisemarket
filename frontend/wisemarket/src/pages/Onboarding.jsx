@@ -13,7 +13,7 @@ const DIETARY_GROUPS = [
   {
     group: 'Religion & Culture',
     items: [
-      { key:'halal', icon:'☪️', label:'Halal', sub:'Certified halal only' },
+      { key:'halal', icon:'☪️', label:'Halal', sub:'No pork, alcohol or unlabelled meat' },
       { key:'vegan', icon:'🌱', label:'Vegan', sub:'No animal products' },
       { key:'vegetarian', icon:'🥦', label:'Vegetarian', sub:'No meat or fish' },
     ]
@@ -61,7 +61,7 @@ const T = {
     skip: 'Skip — set up later',
     done: 'Get started →',
     privacy: '🔒 Your data stays on your device',
-    gift: '🎁 You get 2 months Pro free — no card needed',
+    gift: '✨ Free to use — no account needed',
   },
   de: {
     step1title: 'Willkommen bei WiseMarket',
@@ -75,7 +75,7 @@ const T = {
     skip: 'Überspringen',
     done: 'Loslegen →',
     privacy: '🔒 Ihre Daten bleiben auf Ihrem Gerät',
-    gift: '🎁 2 Monate Pro gratis — keine Karte nötig',
+    gift: '✨ Kostenlos — kein Konto nötig',
   },
   fr: {
     step1title: 'Bienvenue sur WiseMarket',
@@ -89,7 +89,7 @@ const T = {
     skip: 'Ignorer',
     done: 'Commencer →',
     privacy: '🔒 Vos données restent sur votre appareil',
-    gift: '🎁 2 mois Pro gratuits — sans carte',
+    gift: '✨ Gratuit — sans compte',
   },
   it: {
     step1title: 'Benvenuto su WiseMarket',
@@ -103,7 +103,7 @@ const T = {
     skip: 'Salta',
     done: 'Inizia →',
     privacy: '🔒 I tuoi dati rimangono sul dispositivo',
-    gift: '🎁 2 mesi Pro gratis — senza carta',
+    gift: '✨ Gratis — nessun account necessario',
   },
 }
 

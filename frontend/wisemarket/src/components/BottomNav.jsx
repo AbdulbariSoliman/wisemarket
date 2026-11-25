@@ -30,6 +30,9 @@ export default function BottomNav() {
     }
   }, [])
 
+  // The welcome screen has its own "Next" button at the bottom
+  if (path === '/onboarding') return null
+
   return (
     <nav style={{
       position: 'fixed', bottom: 0, left: 0, right: 0,

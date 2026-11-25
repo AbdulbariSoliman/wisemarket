@@ -23,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from dotenv import load_dotenv  # noqa: E402
 from backend.config.settings import ENV_FILE  # noqa: E402
 from backend.api.db import get_supabase_client  # noqa: E402
-from backend.services.product_tags import tags_from_ingredients  # noqa: E402
+from backend.services.product_tags import tags_from_ingredients, tags_from_name  # noqa: E402
 
 load_dotenv(dotenv_path=ENV_FILE)
 
@@ -59,50 +59,61 @@ def main() -> None:
     changes = collections.Counter()
     held = collections.Counter()
     examples = collections.defaultdict(list)
-    scanned = updated = 0
-    offset = 0
+    counts = {"ingredients": 0, "name": 0}
+    updated = 0
 
-    while True:
-        q = (sb.table("products")
-               .select("id, gtin, store, name_en, category, ingredients_raw, ontology_tags")
-               .not_.is_("ingredients_raw", "null")
-               .order("id")
-               .range(offset, offset + PAGE - 1))
-        if args.store:
-            q = q.eq("store", args.store)
-        rows = q.execute().data
-        if not rows:
-            break
-        offset += PAGE
+    # Pass 1: products with an ingredient list -> full analysis.
+    # Pass 2: products without one (e.g. Migros) -> name-only rules, which
+    #         say "unknown" instead of guessing "vegan" / "halal" / "gluten-free".
+    for source in ("ingredients", "name"):
+        offset = 0
+        while True:
+            q = (sb.table("products")
+                   .select("id, gtin, store, name_en, name_de, category, ingredients_raw, ontology_tags")
+                   .order("id")
+                   .range(offset, offset + PAGE - 1))
+            q = q.not_.is_("ingredients_raw", "null") if source == "ingredients" \
+                else q.is_("ingredients_raw", "null")
+            if args.store:
+                q = q.eq("store", args.store)
+            rows = q.execute().data
+            if not rows:
+                break
+            offset += PAGE
 
-        for row in rows:
-            scanned += 1
-            new = tags_from_ingredients(row.get("ingredients_raw") or "", row.get("category"),
-                                        row.get("name_en"))
-            if not new:
-                continue
-            old = row.get("ontology_tags") or {}
-            diff = {}
-            for k in KEYS:
-                if old.get(k) == new[k]:
-                    continue
-                change = f"{k}: {old.get(k)} -> {new[k]}"
-                if is_relaxing(k, old.get(k), new[k]) and not args.allow_relax:
-                    held[change] += 1          # keep the old, careful value
+            for row in rows:
+                counts[source] += 1
+                name = row.get("name_de") or row.get("name_en")
+                if source == "ingredients":
+                    new = tags_from_ingredients(row.get("ingredients_raw") or "", row.get("category"),
+                                                row.get("name_en"))
                 else:
-                    diff[k] = new[k]
-                    changes[change] += 1
-                example = f"{row['gtin']} {(row.get('name_en') or '')[:35]}"
-                if len(examples[change]) < 3 and not any(e.startswith(row["gtin"]) for e in examples[change]):
-                    examples[change].append(example)
-            if not diff:
-                continue
-            if args.apply:
-                sb.table("products").update({"ontology_tags": {**old, **diff}}).eq("id", row["id"]).execute()
-            updated += 1
+                    new = tags_from_name(name, row.get("category"))
+                if not new:
+                    continue
+                old = row.get("ontology_tags") or {}
+                diff = {}
+                for k in KEYS:
+                    if old.get(k) == new.get(k):
+                        continue
+                    change = f"{k}: {old.get(k)} -> {new.get(k)}"
+                    if is_relaxing(k, old.get(k), new.get(k)) and not args.allow_relax:
+                        held[change] += 1          # keep the old, careful value
+                    else:
+                        diff[k] = new.get(k)
+                        changes[change] += 1
+                    example = f"{row['gtin']} {(row.get('name_en') or name or '')[:35]}"
+                    if len(examples[change]) < 3 and not any(e.startswith(row["gtin"]) for e in examples[change]):
+                        examples[change].append(example)
+                if not diff:
+                    continue
+                if args.apply:
+                    sb.table("products").update({"ontology_tags": {**old, **diff}}).eq("id", row["id"]).execute()
+                updated += 1
 
     mode = "UPDATED" if args.apply else "WOULD UPDATE (preview)"
-    print(f"Scanned {scanned} products with ingredients — {mode}: {updated}")
+    print(f"Scanned {counts['ingredients']} products with ingredients and "
+          f"{counts['name']} without — {mode}: {updated}")
     for change, n in changes.most_common():
         print(f"  {n:6}  {change:28}  e.g. " + "; ".join(examples[change]))
     if held:
@@ -116,7 +127,7 @@ def main() -> None:
 
 def show(sb, gtins) -> None:
     rows = (sb.table("products")
-              .select("gtin, store, name_en, category, ingredients_raw, ontology_tags")
+              .select("gtin, store, name_en, name_de, category, ingredients_raw, ontology_tags")
               .in_("gtin", gtins).execute().data)
     if not rows:
         print("No products found for:", " ".join(gtins))
@@ -126,8 +137,11 @@ def show(sb, gtins) -> None:
             continue
         seen.add(row["gtin"])
         old = row.get("ontology_tags") or {}
-        new = tags_from_ingredients(row.get("ingredients_raw") or "", row.get("category"),
+        if row.get("ingredients_raw"):
+            new = tags_from_ingredients(row["ingredients_raw"], row.get("category"),
                                         row.get("name_en")) or {}
+        else:
+            new = tags_from_name(row.get("name_de") or row.get("name_en"), row.get("category"))
         print(f"\n{row['gtin']}  {row.get('name_en')}  [{row.get('category')}]")
         print(f"  ingredients: {(row.get('ingredients_raw') or '').strip()[:600]}")
         for k in KEYS:

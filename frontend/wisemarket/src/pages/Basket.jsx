@@ -26,6 +26,8 @@ function NutritionBar({ label, value, unit, max, color }) {
   )
 }
 
+const NO_PRICE = { en: 'no price yet', de: 'noch kein Preis', fr: 'pas encore de prix', it: 'nessun prezzo' }
+
 export default function Basket() {
   const navigate = useNavigate()
   const { items, addProduct: addToBasket, removeProduct, updateQuantity } = useBasket()
@@ -138,9 +140,11 @@ export default function Basket() {
         }
       }
 
+      // Products without any price come back as "Unknown": keep the saved name
+      const saved = items.find(i => i.gtin === item.gtin)
       return {
         gtin: item.gtin,
-        name: item.name,
+        name: (item.name && item.name !== 'Unknown') ? item.name : (saved?.name || item.gtin),
         quantity: item.quantity,
         store: chosenStore || null,
         price,
@@ -373,7 +377,7 @@ export default function Basket() {
                   </p>
                   <p style={{ margin: '2px 0 0', fontSize: 11,
                                color: item.missing ? 'var(--muted)' : (STORE_COLORS[item.store] || 'var(--muted)') }}>
-                    {item.missing ? '— not available' : `● ${item.store}`}
+                    {item.missing ? `— ${NO_PRICE[lang] || NO_PRICE.en}` : `● ${item.store}`}
                   </p>
                 </div>
 

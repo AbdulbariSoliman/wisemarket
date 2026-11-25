@@ -18,6 +18,30 @@ function dist(lat1,lon1,lat2,lon2) {
   return Math.round(R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)))
 }
 
+// Public OpenStreetMap (Overpass) servers. The main one is often overloaded,
+// so try the next one when a server is busy or slow.
+const OVERPASS_SERVERS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+]
+
+async function queryOverpass(q) {
+  for (const url of OVERPASS_SERVERS) {
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), 12000)
+    try {
+      const r = await fetch(url, { method: 'POST', body: q, signal: ctrl.signal })
+      if (r.ok) return await r.json()
+    } catch {
+      // busy, slow or unreachable: try the next server
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+  throw new Error('All map servers are busy')
+}
+
 export default function StoreMap() {
   const navigate = useNavigate()
   const [stores, setStores]   = useState([])
@@ -31,8 +55,7 @@ export default function StoreMap() {
         const {latitude:lat, longitude:lon} = pos.coords
         const q = `[out:json][timeout:15];(node["shop"="supermarket"](around:2000,${lat},${lon});node["shop"="discount"](around:2000,${lat},${lon}););out body;`
         try {
-          const r = await fetch('https://overpass-api.de/api/interpreter', {method:'POST', body:q})
-          const d = await r.json()
+          const d = await queryOverpass(q)
           const results = (d.elements||[])
             .filter(e => BRANDS.some(b => (e.tags?.name||'').toLowerCase().includes(b.toLowerCase())))
             .map(e => {
@@ -49,7 +72,7 @@ export default function StoreMap() {
             .sort((a,b)=>a.distance-b.distance)
             .slice(0,15)
           setStores(results)
-        } catch { setError('Could not load nearby stores.') }
+        } catch { setError('The free map service is busy right now. Please try again in a minute.') }
         setLoading(false)
       },
       () => { setError('Location access denied.'); setLoading(false) },

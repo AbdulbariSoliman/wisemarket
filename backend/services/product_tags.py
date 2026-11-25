@@ -140,3 +140,92 @@ def tags_from_ingredients(ingredients_raw: str, category: Optional[str] = None,
         "lactose_free": bool(v["is_lactose_free"]) or not dairy_hits,
         "palm_oil":     bool(v["has_palm_oil"]),
     }
+
+
+# ── Products without an ingredient list (e.g. Migros) ────────────────
+_VEGAN_NAME = re.compile(r"\b(vegan(e|er|es|o|a|i)?|végétalien(ne)?|plant[- ]based|pflanzlich(e|er|es)?)\b")
+_VEGETARIAN_NAME = re.compile(r"\b(vegetarisch(e|er|es)?|végétarien(ne)?|vegetarian[oa]?|vegi|veggie)\b")
+_GLUTEN_FREE_NAME = re.compile(r"gluten[- ]?fre[ie]|sans gluten|senza glutine|gluten[- ]free")
+_LACTOSE_FREE_NAME = re.compile(r"lakto[s]?e[- ]?frei|laktosefrei|sans lactose|senza lattosio|lactose[- ]free")
+_GLUTEN_NAME_WORDS = (
+    "brot", "pasta", "mehl", "weizen", "gerste", "dinkel", "roggen", "nudeln", "kuchen",
+    "gebäck", "teig", "biscuit", "cookie", "keks", "guetzli", "petit beurre", "croissant",
+    "pizza", "spaghetti", "penne", "fusilli", "lasagne", "couscous", "paniert", "zwieback",
+    "waffel", "cracker", "pain", "farine", "blé", "pâtes", "pane", "farina", "biscotti",
+)
+_MEAT_FISH_CATEGORIES = {"meat", "fish"}
+_ANIMAL_CATEGORIES = {"meat", "fish", "dairy"}
+
+
+def tags_from_name(name: Optional[str], category: Optional[str] = None) -> Dict[str, Optional[bool]]:
+    """
+    Tags for a product we only know by its name and category.
+
+    A name can prove that something is NOT vegan ("au Lait", "Butter"),
+    but it can't prove that it IS vegan: the missing ingredient list might
+    contain anything. So the answer is False when there is evidence against,
+    True only when the name itself says so ("vegan", "glutenfrei", "Halal"),
+    and None (unknown) otherwise. The app shows no badge for None.
+    """
+    low = (name or "").lower()
+    cat = (category or "").lower()
+    tags: Dict[str, Optional[bool]] = {
+        "vegan": None, "vegetarian": None, "halal": None,
+        "gluten_free": None, "lactose_free": None, "palm_oil": None,
+    }
+    if not low:
+        return tags
+
+    parser, router, matcher, _ = _pipeline()
+    matches = matcher.match(parser.normalize(low), router.route(cat))
+    matches = apply_name_hints(matches, name)
+
+    animal = bool(matches.get("animal_products") or matches.get("egg_synonyms"))
+    meat_fish = bool(matches.get("meat") or matches.get("pork") or matches.get("fish_synonyms")
+                     or matches.get("shellfish_synonyms")) or cat in _MEAT_FISH_CATEGORIES
+    dairy = any(any(w in h for w in _DAIRY_WORDS) for h in matches.get("animal_products", []))
+    says_vegan = bool(_VEGAN_NAME.search(low))
+    says_vegetarian = bool(_VEGETARIAN_NAME.search(low))
+
+    # vegan / vegetarian. "Vegane Bratwurst" or "Planted Chicken vegan" name
+    # a meat on purpose: the label wins over the meat word.
+    if says_vegan:
+        tags["vegan"] = tags["vegetarian"] = True
+        meat_fish = False
+    elif says_vegetarian:
+        tags["vegetarian"] = True
+        tags["vegan"] = False if (animal or dairy) else None
+        meat_fish = False
+    elif meat_fish:
+        tags["vegan"] = tags["vegetarian"] = False
+    elif animal or cat in _ANIMAL_CATEGORIES:
+        tags["vegan"] = False
+
+    # halal: pork or alcohol rules it out; only a halal label proves it
+    if matches.get("alcohol") or (matches.get("pork") and not says_vegan):
+        tags["halal"] = False
+    elif matches.get("halal_labels"):
+        tags["halal"] = True
+    elif meat_fish and cat == "meat" and not matches.get("fish_synonyms"):
+        tags["halal"] = False
+
+    # gluten
+    if _GLUTEN_FREE_NAME.search(low):
+        tags["gluten_free"] = True
+    elif matches.get("coeliac_triggers") or any(w in low for w in _GLUTEN_NAME_WORDS):
+        tags["gluten_free"] = False
+
+    # lactose
+    if _LACTOSE_FREE_NAME.search(low):
+        tags["lactose_free"] = True
+    elif dairy:
+        tags["lactose_free"] = False
+
+    if matches.get("palm_oil"):
+        tags["palm_oil"] = True
+
+    # Plain fruit and vegetables are vegan, halal, gluten- and lactose-free
+    # by nature, as long as the name shows nothing else in them.
+    if cat == "fresh_produce" and all(v is None for v in tags.values()):
+        tags.update(vegan=True, vegetarian=True, halal=True, gluten_free=True, lactose_free=True)
+    return tags

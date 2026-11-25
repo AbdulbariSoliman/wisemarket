@@ -17,9 +17,27 @@ const DINNERS = [
   { id:'pizza_night',      icon:'🍕', name:'Pizza Night',      search:'mozzarella tomaten pizza teig' },
 ]
 
+const T = {
+  nearby:     { en: 'Nearby', de: 'In der Nähe', fr: 'À proximité', it: 'Vicino' },
+  askAi:      { en: 'Ask AI', de: 'KI fragen', fr: 'Demander à l’IA', it: 'Chiedi all’IA' },
+  scan:       { en: 'Scan', de: 'Scannen', fr: 'Scanner', it: 'Scansiona' },
+  shop:       { en: 'Shop →', de: 'Einkaufen →', fr: 'Acheter →', it: 'Acquista →' },
+  inSeason:   { en: 'In season', de: 'Saisonal', fr: 'De saison', it: 'Di stagione' },
+  dinner:     { en: "Tonight's dinner idea", de: 'Idee fürs Abendessen', fr: 'Idée pour ce soir', it: 'Idea per stasera' },
+  fullRecipe: { en: 'Tap for the full recipe →', de: 'Tippen für das ganze Rezept →', fr: 'Touchez pour la recette →', it: 'Tocca per la ricetta →' },
+  deals:      { en: "Today's deals", de: 'Aktionen heute', fr: 'Promos du jour', it: 'Offerte di oggi' },
+  resultsFor: { en: 'results for', de: 'Ergebnisse für', fr: 'résultats pour', it: 'risultati per' },
+  dataTitle:  { en: 'Your data stays yours', de: 'Deine Daten bleiben deine', fr: 'Vos données restent à vous', it: 'I tuoi dati restano tuoi' },
+  dataText:   { en: 'WiseMarket never sells your shopping data. Delete everything anytime in Profile.',
+                de: 'WiseMarket verkauft deine Einkaufsdaten nie. Du kannst alles jederzeit im Profil löschen.',
+                fr: 'WiseMarket ne vend jamais vos données d’achat. Supprimez tout à tout moment dans le profil.',
+                it: 'WiseMarket non vende mai i tuoi dati di acquisto. Puoi cancellare tutto nel profilo.' },
+}
+
 export default function Home() {
   const navigate = useNavigate()
   const lang = localStorage.getItem('lang') || 'en'
+  const tx = key => T[key][lang] || T[key].en
   const inputRef = useRef()
 
   const [query, setQuery]       = useState('')
@@ -102,9 +120,9 @@ export default function Home() {
       {/* Quick actions */}
       <div style={{ display: 'flex', gap: 8, padding: '14px 16px 0' }}>
         {[
-          { icon:'📍', label:'Nearby',  path:'/stores' },
-          { icon:'💬', label:'Ask AI',  path:'/chat'   },
-          { icon:'📷', label:'Scan',    path:'/scan'   },
+          { icon:'📍', label: tx('nearby'), path:'/stores' },
+          { icon:'💬', label: tx('askAi'),  path:'/chat'   },
+          { icon:'📷', label: tx('scan'),   path:'/scan'   },
         ].map(({ icon, label, path }) => (
           <button key={path} onClick={() => navigate(path)} style={{
             flex: 1, padding: '10px 4px',
@@ -131,11 +149,11 @@ export default function Home() {
             <p style={{ margin: 0, fontSize: 13, fontWeight: 600 }}>{seasonal.banner}</p>
             {seasonal.seasonalProduce?.length > 0 && (
               <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--muted)' }}>
-                🇨🇭 In season: {seasonal.seasonalProduce.slice(0, 3).join(' · ')}
+                🇨🇭 {tx('inSeason')}: {seasonal.seasonalProduce.slice(0, 3).join(' · ')}
               </p>
             )}
           </div>
-          <span style={{ fontSize: 11, color: 'var(--red)', fontWeight: 600 }}>Shop →</span>
+          <span style={{ fontSize: 11, color: 'var(--red)', fontWeight: 600 }}>{tx('shop')}</span>
         </div>
       )}
 
@@ -241,7 +259,7 @@ export default function Home() {
       {results.length > 0 && (
         <div style={{ padding: '12px 16px 0' }}>
           <p style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10, fontWeight: 500 }}>
-            {results.length} results for "{query}"
+            {results.length} {tx('resultsFor')} "{query}"
           </p>
           {results.map((p, i) => (
             <div key={`${p.gtin}-${p.store}-${i}`}
@@ -294,7 +312,7 @@ export default function Home() {
           {/* Dinner suggestion */}
           <div style={{ padding: '20px 16px 0' }}>
             <h2 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 12px' }}>
-              🍽️ Tonight's dinner idea
+              🍽️ {tx('dinner')}
             </h2>
             <div className="card" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }}
               onClick={() => navigate(`/recipe/${dinner.id}`)}>
@@ -302,17 +320,17 @@ export default function Home() {
               <div style={{ flex: 1 }}>
                 <p style={{ margin: 0, fontWeight: 600, fontSize: 15 }}>{dinner.name}</p>
                 <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--muted)' }}>
-                  Tap for the full recipe →
+                  {tx('fullRecipe')}
                 </p>
               </div>
-              <span style={{ fontSize: 11, color: 'var(--red)', fontWeight: 600 }}>Shop →</span>
+              <span style={{ fontSize: 11, color: 'var(--red)', fontWeight: 600 }}>{tx('shop')}</span>
             </div>
           </div>
 
           {/* Deals */}
           {promotions.length > 0 && (
             <div style={{ padding: '20px 16px 0' }}>
-              <h2 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 12px' }}>🔥 Today's deals</h2>
+              <h2 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 12px' }}>🔥 {tx('deals')}</h2>
               {promotions.map((promo, i) => {
                 const color = STORE_COLORS[promo.store] || 'var(--muted)'
                 return (
@@ -359,9 +377,9 @@ export default function Home() {
             }}>
               <span style={{ fontSize: 18, flexShrink: 0 }}>🔒</span>
               <div style={{ flex: 1 }}>
-                <p style={{ margin: 0, fontSize: 13, fontWeight: 600 }}>Your data stays yours</p>
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 600 }}>{tx('dataTitle')}</p>
                 <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>
-                  WiseMarket never sells your shopping data. Delete everything anytime in Profile.
+                  {tx('dataText')}
                 </p>
               </div>
               <button onClick={() => {

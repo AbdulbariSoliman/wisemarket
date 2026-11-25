@@ -66,7 +66,7 @@ export default function Chat() {
 
       {/* Messages */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px',
-                    paddingBottom: '80px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    paddingBottom: '160px', display: 'flex', flexDirection: 'column', gap: 12 }}>
         {messages.map((msg, i) => (
           <div key={i} style={{
             display: 'flex',
@@ -114,10 +114,10 @@ export default function Chat() {
         <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
+      {/* Input: sits just above the bottom navigation bar */}
       <div style={{
-        position: 'fixed', bottom: 0, left: 0, right: 0,
-        padding: '12px 16px calc(12px + env(safe-area-inset-bottom))',
+        position: 'fixed', bottom: 'calc(66px + env(safe-area-inset-bottom))', left: 0, right: 0,
+        padding: '12px 16px',
         background: 'rgba(13,13,15,0.95)', backdropFilter: 'blur(20px)',
         borderTop: '1px solid var(--border)',
         display: 'flex', gap: 8, alignItems: 'flex-end',

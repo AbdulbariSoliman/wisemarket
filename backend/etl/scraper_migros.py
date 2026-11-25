@@ -18,6 +18,7 @@ load_dotenv(ENV_FILE_STR)
 from playwright.async_api import async_playwright
 from tqdm import tqdm
 from backend.api.db import get_supabase_client
+from backend.services.product_tags import tags_from_name
 
 STORE    = "migros"
 TODAY    = date.today().isoformat()
@@ -100,65 +101,26 @@ def is_non_food(name: str, breadcrumb: list) -> bool:
 
 
 def build_ontology_tags(name: str, breadcrumb: list) -> dict:
+    """
+    Migros pages have no ingredient list, so dietary tags come from the
+    product name only: False when the name shows an animal, pork, alcohol
+    or gluten ingredient, True only when the name says so ("vegan",
+    "glutenfrei", "Halal"), and None (unknown) otherwise. A shop category
+    such as "snacks" is never treated as proof that a product is vegan.
+    """
     cat = map_category(breadcrumb)
     name_lower = name.lower()
+    is_regional = any(x in name_lower for x in ["aus der region", "region", "regional", "schweizer", "suisse"])
+    is_bio      = any(x in name_lower for x in ["bio", "biologisch", "organic", "biologique"])
 
-    # Bug A fix: if the product doesn't resolve to a known food
-    # category, don't claim any dietary/religious safety tags at
-    # all - "uncategorized" must mean unknown, never "safe."
-    if cat == "other":
-        return {
-            "halal": None, "vegetarian": None, "vegan": None,
-            "gluten_free": None, "lactose_free": None,
-            "organic": False, "regional": False,
-            "is_bio": False, "is_regional": False,
-        }
-
-    has_pork    = any(x in name_lower for x in ["schwein","speck","schinken","salami","wurst","lard","porc"])
-    has_alcohol = any(x in name_lower for x in ["bier","wein","wine","bière","alkohol","spirits","vodka","whisky"])
-    has_halal_cert = any(x in name_lower for x in ["halal","حلال"])
-    is_regional = any(x in name_lower for x in ["aus der region","region","regional","schweizer","suisse"])
-    is_bio      = any(x in name_lower for x in ["bio","biologisch","organic","biologique"])
-
-    # Meat/fish: halal ONLY if explicitly certified
-    # Non-meat: halal if no pork + no alcohol (dairy, pantry, snacks etc don't need cert)
-    if cat in ["meat", "fish"]:
-        halal = has_halal_cert and not has_pork and not has_alcohol
-    else:
-        halal = not has_pork and not has_alcohol
-
-    explicit_gluten_free = any(x in name_lower for x in
-        ["glutenfrei","gluten-frei","gluten free","sans gluten","senza glutine"])
-    contains_gluten_words = any(x in name_lower for x in
-        ["brot","pasta","mehl","weizen","gerste","dinkel","nudeln","kuchen","gebäck","teig"])
-
-    explicit_lactose_free = any(x in name_lower for x in
-        ["laktosefrei","laktose-frei","lactose free","sans lactose","senza lattosio"])
-
-    if explicit_gluten_free:
-        gluten_free_tag = True
-    elif contains_gluten_words:
-        gluten_free_tag = False
-    else:
-        gluten_free_tag = None
-
-    if explicit_lactose_free:
-        lactose_free_tag = True
-    elif cat == "dairy":
-        lactose_free_tag = False
-    else:
-        lactose_free_tag = None
-
+    tags = tags_from_name(name, None if cat == "other" else cat)
+    tags.pop("palm_oil", None)
     return {
-        "halal":        halal,
-        "vegetarian":   cat not in ["meat","fish"] and not has_pork,
-        "vegan":        cat not in ["meat","fish","dairy"] and not has_pork,
-        "gluten_free":  gluten_free_tag,
-        "lactose_free": lactose_free_tag,
-        "organic":      is_bio,
-        "regional":     is_regional,
-        "is_bio":       is_bio,
-        "is_regional":  is_regional,
+        **tags,
+        "organic":     is_bio,
+        "regional":    is_regional,
+        "is_bio":      is_bio,
+        "is_regional": is_regional,
     }
 
 

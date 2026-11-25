@@ -327,3 +327,26 @@ def test_sans_lactose_yogurt_is_lactose_free():
 def test_decimal_commas_and_html_entities_are_cleaned():
     parsed = PARSER.normalize("cacao maigre 7,4%, LAIT écrémé en poudre 6,6%, &lt;1% son de blé, sel 0,5 g")
     assert parsed == ["cacao maigre", "lait écrémé en poudre", "son de blé", "sel"]
+
+
+# ── products without an ingredient list (Migros): name-only tags ─────
+
+@pytest.mark.parametrize("name, category, expected", [
+    ("Butter und Chocolate Cookies", "snacks",
+     {"vegan": False, "gluten_free": False, "lactose_free": False, "halal": None}),
+    ("M-Classic · Petit Beurre · Chocolat au Lait", "snacks", {"vegan": False, "gluten_free": False}),
+    ("LU · Barquette · Chocolat", "snacks",
+     {"vegan": None, "vegetarian": None, "halal": None, "gluten_free": None}),
+    ("Cornatur · Vegane Bratwurst", "plant_protein", {"vegan": True, "vegetarian": True, "halal": None}),
+    ("Delikatess Geflügel Edelsalami", "meat", {"vegan": False, "vegetarian": False, "halal": False}),
+    ("Halal Poulet Brust", "meat", {"halal": True, "vegetarian": False}),
+    ("Feldschlösschen Bier", "beverages", {"halal": False}),
+    ("Schär · Brot · glutenfrei", "bakery", {"gluten_free": True}),
+    ("Migros High Protein · Milch · UHT, laktosefrei", "dairy", {"vegan": False, "lactose_free": True}),
+    ("Bananen", "fresh_produce", {"vegan": True, "halal": True, "gluten_free": True}),
+])
+def test_name_only_tags_never_guess_safe(name, category, expected):
+    from backend.services.product_tags import tags_from_name
+    tags = tags_from_name(name, category)
+    for key, value in expected.items():
+        assert tags[key] is value, f"{name}: {key}={tags[key]}"

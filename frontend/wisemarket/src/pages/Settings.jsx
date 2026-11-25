@@ -9,7 +9,7 @@ const LANGUAGES = [
 ]
 
 const DIETARY = [
-  { key: 'halal',           label: '☪️ Halal (certified)'     },
+  { key: 'halal',           label: '☪️ Halal'                 },
   { key: 'vegan',           label: '🌱 Vegan'                  },
   { key: 'vegetarian',      label: '🥦 Vegetarian'             },
   { key: 'gluten_free',     label: '🌾 Gluten-Free'            },

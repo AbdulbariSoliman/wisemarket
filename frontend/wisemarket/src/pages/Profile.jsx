@@ -9,7 +9,7 @@ const LANGUAGES = [
 ]
 
 const DIETARY = [
-  { key: 'halal',            label: '☪️ Halal (certified)'     },
+  { key: 'halal',            label: '☪️ Halal'                 },
   { key: 'vegan',            label: '🌱 Vegan'                  },
   { key: 'vegetarian',       label: '🥦 Vegetarian'             },
   { key: 'gluten_free',      label: '🌾 Gluten-Free'            },
@@ -72,19 +72,19 @@ export default function Profile() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
             <p style={{ margin: 0, fontFamily: 'Syne', fontSize: 16, fontWeight: 700 }}>
-              🎁 2 months Pro free
+              ✨ WiseMarket accounts
             </p>
             <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--muted)' }}>
-              Sign in to activate · No card needed
+              Sync across devices and unlock extra features
             </p>
           </div>
-          <button style={{
-            background: 'var(--red)', border: 'none', color: 'white',
-            borderRadius: 10, padding: '8px 16px', fontSize: 13,
-            fontWeight: 600, cursor: 'pointer',
+          <span style={{
+            border: '1px solid rgba(230,57,70,0.4)', color: 'var(--red)',
+            borderRadius: 10, padding: '6px 12px', fontSize: 12, fontWeight: 600,
+            whiteSpace: 'nowrap',
           }}>
-            Sign in
-          </button>
+            Coming soon
+          </span>
         </div>
         <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {['Price alerts', 'Price history', 'Budget mode', 'Recipe calculator'].map(f => (
@@ -209,7 +209,7 @@ export default function Profile() {
       <div className="card" style={{ marginBottom: 12 }}>
         <p style={{ margin: '0 0 8px', fontSize: 14, fontWeight: 600 }}>🔒 Privacy</p>
         <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--muted)', lineHeight: 1.6 }}>
-          WiseMarket never sells your shopping data. Your preferences stay on your device. Sign in to sync across devices — delete everything anytime.
+          WiseMarket never sells your shopping data. Your preferences stay on your device — delete everything anytime.
         </p>
         <button style={{
           background: 'none', border: '1px solid var(--border)', borderRadius: 10,
@@ -225,7 +225,7 @@ export default function Profile() {
         {[
           ['Version',  '2.0.0'],
           ['Products', '~13,000 Swiss products'],
-          ['Prices',   'Migros (live daily)'],
+          ['Prices',   'Migros · other stores: sample data'],
           ['AI',       'Groq · llama-3.3-70b'],
           ['Data',     'Your data stays yours'],
         ].map(([k, v]) => (
