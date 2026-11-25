@@ -226,7 +226,7 @@ export default function Profile() {
           ['Version',  '2.0.0'],
           ['Products', '~13,000 Swiss products'],
           ['Prices',   'Migros · other stores: sample data'],
-          ['AI',       'Groq · llama-3.3-70b'],
+          ['AI',       'Groq · gpt-oss-120b'],
           ['Data',     'Your data stays yours'],
         ].map(([k, v]) => (
           <div key={k} style={{

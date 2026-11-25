@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="https://github.com/AbdulbariSoliman/wisemarket/actions/workflows/ci.yml"><img src="https://github.com/AbdulbariSoliman/wisemarket/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <img src="https://img.shields.io/badge/tests-244-brightgreen" alt="244 tests">
+  <img src="https://img.shields.io/badge/tests-247-brightgreen" alt="247 tests">
   <img src="https://img.shields.io/badge/Python-3.11–3.13-3776AB?logo=python&logoColor=white" alt="Python">
   <img src="https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white" alt="FastAPI">
   <img src="https://img.shields.io/badge/React_19-61DAFB?logo=react&logoColor=black" alt="React">
@@ -34,7 +34,16 @@ Search or scan a product, compare its price across stores, see at a glance wheth
 - 🎯 **Measured accuracy.** False "vegan" claims fell from 19 to 0 on 100 real products, and 7,255 products were corrected in the live catalogue.
 - 🤖 **AI agent grounded in data.** The LLM detects intent and writes the answer, but every price and product comes from Postgres.
 - 🛡️ **Safety first.** Automated re-tagging can only make a tag stricter; "this is safe" changes go to human review.
-- ✅ **Tested and shipped.** 244 tests, CI with integration tests against a fresh Supabase instance on every push, and a Docker deployment that goes live automatically.
+- ✅ **Tested and shipped.** 247 tests, CI with integration tests against a fresh Supabase instance on every push, and a Docker deployment that goes live automatically.
+
+### What's new (November 2026)
+
+- 🚀 **Live on Render.** One Docker container serves the app and the API, and every push to `main` deploys automatically.
+- 🛡️ **No more guessed diet badges.** Products without a readable ingredient list are tagged from their name only; 5,267 unproven "safe" tags were removed.
+- 🤖 **New AI models.** Groq retired Llama 3.1 8B and 3.3 70B on 16 Aug 2026; the agent now runs on `gpt-oss-20b` and `gpt-oss-120b`, and errors are translated.
+- 📱 **Installable app.** Real app icons, so "Add to Home Screen" works; the chat box no longer hides behind the menu bar.
+- 🌍 **More translations, clearer screens.** Home in DE/FR/IT, basket items without a price show their name, and "Coming soon" replaces buttons that didn't work yet.
+- 🧹 **Cleanup.** 22 unused files removed (empty modules, an old pipeline, template assets).
 
 ---
 
@@ -81,7 +90,7 @@ The rule behind the design: **anything that must be correct is plain code; the L
 
 ```mermaid
 flowchart TD
-    Q["User: 'where is oat milk cheapest?'"] --> I{Intent detection<br/>llama-3.1-8b-instant}
+    Q["User: 'where is oat milk cheapest?'"] --> I{Intent detection<br/>gpt-oss-20b}
     I -->|find_product / check_dietary| T1[Search products<br/>+ dietary filters]
     I -->|price_check / compare_stores / basket_advice| T2[Price comparison]
     I -->|nutrition_query| T3[Nutrition facts]
@@ -89,7 +98,7 @@ flowchart TD
     I -->|scan_lookup| T5[GTIN lookup]
     I -->|general| T6[No database call]
     T1 & T2 & T3 & T4 & T5 --> R[Real rows from Postgres]
-    R --> W[Answer writer<br/>llama-3.3-70b-versatile]
+    R --> W[Answer writer<br/>gpt-oss-120b]
     T6 --> W
     W --> A["Answer in the user's language,<br/>using only the retrieved facts"]
 ```
@@ -97,7 +106,7 @@ flowchart TD
 - **9 intents**, detected by a small, fast model. If it is unsure, a keyword fallback still extracts the search term ("oat milk" from "where is oat milk cheapest?").
 - **Database tools** return real products, prices and promotions. The answer model is instructed to use only those facts, so there are no invented prices.
 - If the database or the LLM is unavailable, the user gets a **friendly, translated error** instead of a crash.
-- Models are configurable through environment variables (`LLM_INTENT_MODEL`, `LLM_REFINER_MODEL`, `LLM_FALLBACK_MODEL`).
+- Models are configurable through environment variables (`LLM_INTENT_MODEL`, `LLM_REFINER_MODEL`, `LLM_FALLBACK_MODEL`). `python scripts/check_llm.py` checks in seconds that your key and models answer.
 
 ---
 
@@ -119,7 +128,7 @@ Every product with an ingredient list runs through the same four-step pipeline, 
 | Lactose-free | No dairy ingredient, or labelled lactose-free |
 | Palm oil | Palm oil, palm fat or palm kernel oil found |
 
-Lists in languages the ontology doesn't cover (for example Spanish or Czech) are detected and **left untagged** rather than guessed. Products with no ingredient list at all (most Migros items) get tags from their **name** only, and only when the name proves them.
+Products whose list is in a language the ontology doesn't cover (for example Spanish or Czech), and products with no ingredient list at all (most Migros items), are judged by their **name** only: a tag is set only when the name proves it ("Butter Cookies" → not vegan, "glutenfrei" → gluten-free, "Weissbier" → not halal). Everything else stays **unknown** rather than guessed.
 
 ### Measured on real data
 
@@ -129,8 +138,9 @@ Lists in languages the ontology doesn't cover (for example Spanish or Czech) are
 | Missed palm oil, same 100 products | 13 | **0** |
 | Palm-oil false alarms, same 100 products | 0 | **0** |
 | Stored tags corrected in the live catalogue (7,959 products with ingredients) | – | **7,255 products** |
+| Unproven "safe" tags removed from products without ingredients (5,405 products) | – | **5,267 products** |
 
-Corrections in the live catalogue included about 2,000 products wrongly listed as vegan, 1,340 as gluten-free, 1,090 as halal and 790 as vegetarian, plus about 700 newly detected palm-oil products.
+Corrections in the live catalogue included about 2,000 products wrongly listed as vegan, 1,340 as gluten-free, 1,090 as halal and 790 as vegetarian, plus about 700 newly detected palm-oil products. For Migros products, which have no ingredient list, an old import had marked almost everything halal and gluten-free; those guesses were replaced by "unknown" or by what the name proves (for example 775 products are no longer called vegan).
 
 The backfill (`scripts/recompute_tags.py`) applies only changes that make a tag **stricter**. Changes that would declare a product *safer* (e.g. not halal → halal) are listed for human review, because wrongly calling a product safe is the harmful mistake.
 
@@ -202,10 +212,10 @@ Database and network errors return clear `503`/`502` responses instead of stack 
 |---|---|
 | **Rules for facts, LLM for language** | Prices and dietary verdicts must be exact and testable; LLMs are good at understanding questions, not at being a source of truth. |
 | **Ontology files instead of a model for ingredients** | 67 readable CSV word lists in 4 languages can be reviewed, extended and tested line by line, and every verdict can be explained. |
-| **"Unknown" over "guessed"** | Labels in unsupported languages are left untagged instead of risking a wrong "vegan" or "halal". |
+| **"Unknown" over "guessed"** | When the ingredients can't be read, the app shows no badge instead of risking a wrong "vegan", "halal" or "gluten-free". |
 | **Strict-only automatic updates** | Re-tagging may tighten a tag automatically, but loosening one requires review. |
 | **Source label on every field** | Merged products show which value came from the retailer, from Open Food Facts, or was computed. |
-| **Two model sizes** | A fast 8B model classifies the intent; a 70B model writes the answer, with automatic fallback. |
+| **Two model sizes, swappable** | A fast 20B model classifies the intent; a 120B model writes the answer, with automatic fallback. Model names live in environment variables, so a provider retiring a model is a config change, not a code change. |
 | **No account needed** | Preferences and basket live on the device: private by default, and easy to try. |
 
 ---
@@ -302,7 +312,7 @@ uvicorn backend.api.serve:app --port 8000      # app + API on http://localhost:8
 
 | Suite | Command | Tests |
 |---|---|---|
-| Logic (no database) | `pytest -m "not integration"` | 200 |
+| Logic (no database) | `pytest -m "not integration"` | 203 |
 | Integration (real API + Postgres) | `pytest -m integration` | 44 |
 | Frontend | `npm run lint && npm run build` | ESLint + Vite build |
 
@@ -327,8 +337,8 @@ wisemarket/
 │   └── schema/         schema.sql + migrations/
 ├── data/ontology/      67 multilingual CSV word lists (en/de/fr/it)
 ├── frontend/wisemarket React 19 + Vite PWA
-├── scripts/            recompute_tags.py, check_connection.py
-├── tests/              244 tests (logic + integration)
+├── scripts/            recompute_tags.py, check_connection.py, check_llm.py
+├── tests/              247 tests (logic + integration)
 ├── docs/               APP_GUIDE.md, BUILD_LOG.md, screenshots/
 ├── Dockerfile          builds the app and the API into one container
 └── render.yaml         one-click deploy on Render
@@ -340,12 +350,12 @@ wisemarket/
 |---|---|
 | **Frontend** | React 19 · Vite 8 · React Router 7 · Tailwind CSS 4 · Framer Motion · Lucide icons · ZXing (barcode scanning) · Web Speech API (voice input) · Service Worker + Web App Manifest (installable PWA) |
 | **Backend** | Python 3.12 · FastAPI · Uvicorn · Pydantic · slowapi (rate limiting) · ReportLab + qrcode (PDF export) · Sentry (error tracking, optional) |
-| **AI** | LiteLLM · Groq (`llama-3.1-8b-instant` for intent, `llama-3.3-70b-versatile` for answers, automatic fallback) · intent → tool → answer agent design |
+| **AI** | LiteLLM · Groq (`openai/gpt-oss-20b` for intent, `openai/gpt-oss-120b` for answers, automatic fallback, short reasoning) · intent → tool → answer agent design |
 | **Food analysis** | Rule-based NLP pipeline (parser, router, matcher, decision engine) · 67 multilingual ontology files (EN/DE/FR/IT) |
 | **Data** | Supabase · PostgreSQL · PostgREST · SQL migrations · Row Level Security |
 | **Data engineering** | Playwright (Migros scraper) · Open Food Facts API · GTIN-based merge with source tracking · idempotent backfill scripts |
 | **Deployment** | Docker (multi-stage build: Node → Python) · Render (Blueprint, Frankfurt, auto-deploy on push) · health checks |
-| **Quality** | pytest (244 tests: 200 logic, 44 integration) · ESLint · GitHub Actions CI · Supabase CLI (fresh database in CI) |
+| **Quality** | pytest (247 tests: 203 logic, 44 integration) · ESLint · GitHub Actions CI · Supabase CLI (fresh database in CI) |
 | **Developer tools** | Git · GitHub · GitHub Codespaces · VS Code · Mermaid (diagrams) |
 | **External APIs** | Groq · Open Food Facts · OpenStreetMap Overpass |
 
@@ -356,7 +366,7 @@ wisemarket/
 - **No per-user security yet.** Row Level Security is enabled but has no policies, and the API uses the `service_role` key. Real user accounts (Supabase Auth plus RLS policies) are the next big step.
 - **Migros products have no ingredients of their own.** Only the ~630 products matched with Open Food Facts get a full analysis. For the others, the app shows only what the name proves: "Butter Cookies" is *not vegan*, "glutenfrei" is *gluten-free*, and everything else stays *unknown*, with no badge, rather than guessed.
 - **Halal is ingredient-based, not a certification.** The app flags pork, alcohol and unlabelled meat or gelatine; it cannot verify slaughter or certification.
-- **Only English, German, French and Italian labels are analysed.** Other languages are left untagged.
+- **Only English, German, French and Italian ingredient lists are analysed.** Other languages fall back to the name-only rules.
 - **Some tag changes are held for review** (the "loosening" changes from the backfill); those products keep their stricter tags until reviewed.
 - **Nearby stores** depend on the free public OpenStreetMap servers. The app tries three of them, but when all are busy it asks you to try again later.
 - **Prices for Coop, Aldi and Lidl are sample data** for now; live prices come from Migros.

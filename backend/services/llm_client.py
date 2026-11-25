@@ -10,19 +10,38 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 litellm.suppress_debug_info = True
 
-INTENT_MODEL   = os.environ.get("LLM_INTENT_MODEL",   "groq/llama-3.1-8b-instant")
-REFINER_MODEL  = os.environ.get("LLM_REFINER_MODEL",  "groq/llama-3.3-70b-versatile")
-FALLBACK_MODEL = os.environ.get("LLM_FALLBACK_MODEL", "groq/llama-3.1-8b-instant")
+# Groq shut down llama-3.1-8b-instant and llama-3.3-70b-versatile on 16 Aug 2026;
+# these are its recommended replacements. Override with the env vars if Groq
+# changes its line-up again.
+INTENT_MODEL   = os.environ.get("LLM_INTENT_MODEL",   "groq/openai/gpt-oss-20b")
+REFINER_MODEL  = os.environ.get("LLM_REFINER_MODEL",  "groq/openai/gpt-oss-120b")
+FALLBACK_MODEL = os.environ.get("LLM_FALLBACK_MODEL", "groq/openai/gpt-oss-20b")
+
+# Reasoning models think before they answer, and that thinking counts towards
+# max_tokens. Keep it short and leave room for it, or the answer comes back empty.
+REASONING_HEADROOM = 1024
+
+
+def _is_reasoning_model(model: str) -> bool:
+    return "gpt-oss" in model or "qwen3" in model
 
 
 def _call(model, messages, max_tokens=500, temperature=0.3):
+    kwargs = {}
+    if _is_reasoning_model(model):
+        max_tokens += REASONING_HEADROOM
+        kwargs["extra_body"] = {"reasoning_effort": "low"}
     response = litellm.completion(
         model=model,
         messages=messages,
         max_tokens=max_tokens,
         temperature=temperature,
+        **kwargs,
     )
-    return response.choices[0].message.content.strip()
+    content = (response.choices[0].message.content or "").strip()
+    if not content:
+        raise RuntimeError(f"{model} returned an empty answer")
+    return content
 
 
 def call_intent(messages, max_tokens=200):

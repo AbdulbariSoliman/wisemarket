@@ -413,7 +413,15 @@ Do not invent prices, ingredients, or product details not shown above."""
         return call_refiner(messages, max_tokens=150)
     except Exception as e:
         logger.error("Refiner failed: %s", e)
-        return "I'm sorry, I couldn't process your request right now. Please try again."
+        return _ASSISTANT_DOWN.get(lang, _ASSISTANT_DOWN["en"])
+
+
+_ASSISTANT_DOWN = {
+    "en": "I'm sorry, I couldn't process your request right now. Please try again.",
+    "de": "Entschuldigung, ich kann deine Anfrage gerade nicht bearbeiten. Bitte versuche es nochmals.",
+    "fr": "Désolé, je ne peux pas traiter ta demande pour le moment. Réessaie, s'il te plaît.",
+    "it": "Mi dispiace, al momento non riesco a elaborare la tua richiesta. Riprova, per favore.",
+}
 
 
 _UNAVAILABLE = {

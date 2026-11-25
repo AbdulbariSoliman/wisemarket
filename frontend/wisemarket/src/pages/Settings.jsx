@@ -131,7 +131,7 @@ export default function Settings() {
           ['App',      'WiseMarket v2.0'],
           ['Products', '~13,000 Swiss products'],
           ['Prices',   'Migros (live), more coming'],
-          ['AI',       'Groq · llama-3.3-70b'],
+          ['AI',       'Groq · gpt-oss-120b'],
           ['DB',       'Supabase PostgreSQL'],
         ].map(([k, v]) => (
           <div key={k} style={{
