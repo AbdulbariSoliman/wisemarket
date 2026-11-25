@@ -153,6 +153,7 @@ _GLUTEN_NAME_WORDS = (
     "pizza", "spaghetti", "penne", "fusilli", "lasagne", "couscous", "paniert", "zwieback",
     "waffel", "cracker", "pain", "farine", "blé", "pâtes", "pane", "farina", "biscotti",
 )
+_EGG_NAME = re.compile(r"\b(eggs?|oeufs?|œufs?|eier|ei|uova|uovo)\b")
 _MEAT_FISH_CATEGORIES = {"meat", "fish"}
 _ANIMAL_CATEGORIES = {"meat", "fish", "dairy"}
 
@@ -181,8 +182,12 @@ def tags_from_name(name: Optional[str], category: Optional[str] = None) -> Dict[
     matches = apply_name_hints(matches, name)
 
     animal = bool(matches.get("animal_products") or matches.get("egg_synonyms"))
-    meat_fish = bool(matches.get("meat") or matches.get("pork") or matches.get("fish_synonyms")
-                     or matches.get("shellfish_synonyms")) or cat in _MEAT_FISH_CATEGORIES
+    meat_words = bool(matches.get("meat") or matches.get("pork") or matches.get("fish_synonyms")
+                      or matches.get("shellfish_synonyms"))
+    # Some sources file eggs under "meat" ("chicken-eggs"): an egg name with
+    # no meat word is not meat, whatever the category says.
+    is_egg = (bool(matches.get("egg_synonyms")) or bool(_EGG_NAME.search(low))) and not meat_words
+    meat_fish = meat_words or (cat in _MEAT_FISH_CATEGORIES and not is_egg)
     dairy = any(any(w in h for w in _DAIRY_WORDS) for h in matches.get("animal_products", []))
     says_vegan = bool(_VEGAN_NAME.search(low))
     says_vegetarian = bool(_VEGETARIAN_NAME.search(low))
@@ -206,7 +211,7 @@ def tags_from_name(name: Optional[str], category: Optional[str] = None) -> Dict[
         tags["halal"] = False
     elif matches.get("halal_labels"):
         tags["halal"] = True
-    elif meat_fish and cat == "meat" and not matches.get("fish_synonyms"):
+    elif meat_fish and cat == "meat" and not matches.get("fish_synonyms") and not is_egg:
         tags["halal"] = False
 
     # gluten

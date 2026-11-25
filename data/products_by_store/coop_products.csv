@@ -1,3 +1,0 @@
-gtin,store,name_en,name_de,name_fr,name_it,brand,category,ingredients_raw,ingredients_en,ingredients_de,ingredients_fr,ingredients_it,nutrition_100g,nutrition_serving,allergens
-2345678901234,Coop,Milk 1L,Milch 1L,Lait 1L,Latte 1L,Prix Garantie,Dairy,milk,milk,Milch,lait,latte,"{""calories"":42,""protein"":3.4}","{""calories"":42,""protein"":3.4}","milk"
-2345678901235,Coop,Chocolate Bar,Schokoladenriegel,Barre de chocolat,Barre di cioccolato,Prix Garantie,Confectionery,sugar;cocoa;milk,sugar;cocoa;milk,Zucker;Kakao;Milch,sucre;cacao;lait,zucchero;cacao;latte,"{""calories"":530,""protein"":7.0}","{""calories"":53,""protein"":0.7}","milk;sugar"

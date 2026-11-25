@@ -350,3 +350,12 @@ def test_name_only_tags_never_guess_safe(name, category, expected):
     tags = tags_from_name(name, category)
     for key, value in expected.items():
         assert tags[key] is value, f"{name}: {key}={tags[key]}"
+
+
+@pytest.mark.parametrize("category", ["meat", "dairy", None])
+def test_eggs_filed_under_meat_are_still_vegetarian(category):
+    from backend.services.product_tags import tags_from_name
+    for name in ("Oeufs", "Eier aus Freilandhaltung"):
+        tags = tags_from_name(name, category)
+        assert tags["vegan"] is False
+        assert tags["vegetarian"] is not False and tags["halal"] is not False

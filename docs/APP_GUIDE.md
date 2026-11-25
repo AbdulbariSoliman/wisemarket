@@ -1,10 +1,12 @@
 # WiseMarket: app guide
 
-A short tour of every screen and what happens behind it.
+A short tour of every screen and what happens behind it. Each section links to the screen in the **live app: [wisemarket-6ib3.onrender.com](https://wisemarket-6ib3.onrender.com)**.
 
 ---
 
 ## Onboarding
+
+[Open in the live app ↗](https://wisemarket-6ib3.onrender.com/onboarding)
 
 <img src="screenshots/onboarding.png" width="220" align="right">
 
@@ -17,6 +19,8 @@ No account or e-mail is needed to use the app.
 ---
 
 ## Home
+
+[Open in the live app ↗](https://wisemarket-6ib3.onrender.com/)
 
 <img src="screenshots/home.png" width="220" align="right">
 
@@ -32,6 +36,8 @@ No account or e-mail is needed to use the app.
 
 ## Search
 
+[Open in the live app ↗](https://wisemarket-6ib3.onrender.com/search)
+
 <img src="screenshots/search-vegan-filter.png" width="220" align="right">
 
 Search in any of the 4 languages and filter by **Halal, Vegan, Gluten-free, Lactose-free, Bio**. Each result shows the brand, source, CO₂ score and small tag icons.
@@ -45,6 +51,8 @@ The **Ask AI** tab sends the same box to the chat assistant.
 ---
 
 ## Product
+
+[Open in the live app ↗](https://wisemarket-6ib3.onrender.com/product/3017620422003)
 
 <img src="screenshots/product-analysis.png" width="220" align="right">
 
@@ -61,6 +69,8 @@ The **Ask AI** tab sends the same box to the chat assistant.
 
 ## Price comparison
 
+[Open in the live app ↗](https://wisemarket-6ib3.onrender.com/product/7610000100001)
+
 <img src="screenshots/price-comparison.png" width="220" align="right">
 
 When a product is sold in several stores, the product page shows a tab per store and a comparison chart: total price and **price per 100 g/ml**, cheapest first.
@@ -72,6 +82,8 @@ When a product is sold in several stores, the product page shows a tab per store
 ---
 
 ## Basket
+
+[Open in the live app ↗](https://wisemarket-6ib3.onrender.com/basket)
 
 <img src="screenshots/basket.png" width="220" align="right">
 
@@ -86,6 +98,8 @@ When a product is sold in several stores, the product page shows a tab per store
 
 ## Scan
 
+[Open in the live app ↗](https://wisemarket-6ib3.onrender.com/scan)
+
 <img src="screenshots/scan.png" width="220" align="right">
 
 Opens the camera and reads EAN/UPC barcodes. The product page opens automatically. Without a camera, type the GTIN (the number under the barcode) and tap **Look up**.
@@ -96,6 +110,10 @@ Opens the camera and reads EAN/UPC barcodes. The product page opens automaticall
 
 ## Ask WiseMarket (chat)
 
+[Open in the live app ↗](https://wisemarket-6ib3.onrender.com/chat)
+
+<img src="screenshots/chat.png" width="220" align="right">
+
 The assistant answers questions such as:
 
 - "Where is oat milk cheapest?"
@@ -105,9 +123,13 @@ The assistant answers questions such as:
 
 It detects the intent, fetches real products, prices or promotions from the database, and writes an answer in the user's language using **only those facts**. It needs a Groq API key on the server (`GROQ_API_KEY`); without one, the chat replies with a short "please try again" message instead of crashing.
 
+<br clear="right">
+
 ---
 
 ## Nearby stores
+
+[Open in the live app ↗](https://wisemarket-6ib3.onrender.com/stores)
 
 Shows Migros, Coop, Aldi, Lidl and Denner supermarkets within 2 km, using the device location and OpenStreetMap, sorted by distance and with opening hours where available.
 
@@ -115,10 +137,13 @@ Shows Migros, Coop, Aldi, Lidl and Denner supermarkets within 2 km, using the de
 
 ## Profile and Settings
 
+[Open in the live app ↗](https://wisemarket-6ib3.onrender.com/settings)
+
 <img src="screenshots/settings.png" width="220" align="right">
 
 - **Language** and **appearance** (dark/light).
 - **Dietary preferences** (Halal, Vegan, Vegetarian, Gluten-free, Lactose-free, Dairy-free…), which filter search results automatically.
 - **Privacy:** "Delete my data" clears everything stored on the device.
+- **Accounts** (sync across devices, price alerts, price history) are marked *Coming soon*.
 
 <br clear="right">

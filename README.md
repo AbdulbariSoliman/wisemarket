@@ -4,18 +4,27 @@
 
 <p align="center">
   <a href="https://github.com/AbdulbariSoliman/wisemarket/actions/workflows/ci.yml"><img src="https://github.com/AbdulbariSoliman/wisemarket/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <img src="https://img.shields.io/badge/tests-237-brightgreen" alt="237 tests">
+  <img src="https://img.shields.io/badge/tests-240-brightgreen" alt="240 tests">
   <img src="https://img.shields.io/badge/Python-3.11–3.13-3776AB?logo=python&logoColor=white" alt="Python">
   <img src="https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white" alt="FastAPI">
   <img src="https://img.shields.io/badge/React_19-61DAFB?logo=react&logoColor=black" alt="React">
   <img src="https://img.shields.io/badge/Supabase-3FCF8E?logo=supabase&logoColor=white" alt="Supabase">
   <img src="https://img.shields.io/badge/Groq-LiteLLM-F55036" alt="Groq via LiteLLM">
+  <img src="https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white" alt="Docker">
+  <img src="https://img.shields.io/badge/Render-deployed-46E3B7?logo=render&logoColor=white" alt="Deployed on Render">
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT">
 </p>
+
+<p align="center">
+  <a href="https://wisemarket-6ib3.onrender.com"><img src="https://img.shields.io/badge/🚀_Open_the_live_app-wisemarket--6ib3.onrender.com-E63946?style=for-the-badge" alt="Open the live app"></a>
+</p>
+<p align="center"><sub>Free hosting: the first visit after a quiet period takes up to a minute while the server wakes up.</sub></p>
 
 # WiseMarket 🇨🇭
 
 **A Swiss grocery app that knows what's in your food, where it's cheapest, and what you can eat, in English, German, French and Italian.**
+
+**Live app: [wisemarket-6ib3.onrender.com](https://wisemarket-6ib3.onrender.com)**, best on a phone, and installable as an app from the browser menu.
 
 Search or scan a product, compare its price across stores, see at a glance whether it is vegan, vegetarian, halal, gluten-free or lactose-free and whether it contains palm oil, and ask an AI assistant about your shopping in plain language.
 
@@ -25,26 +34,30 @@ Search or scan a product, compare its price across stores, see at a glance wheth
 - 🎯 **Measured accuracy.** False "vegan" claims fell from 19 to 0 on 100 real products, and 7,255 products were corrected in the live catalogue.
 - 🤖 **AI agent grounded in data.** The LLM detects intent and writes the answer, but every price and product comes from Postgres.
 - 🛡️ **Safety first.** Automated re-tagging can only make a tag stricter; "this is safe" changes go to human review.
-- ✅ **Tested.** 237 tests, and CI runs integration tests against a fresh Supabase instance on every push.
+- ✅ **Tested and shipped.** 240 tests, CI with integration tests against a fresh Supabase instance on every push, and a Docker deployment that goes live automatically.
 
 ---
 
-**Contents:** [What it does](#what-it-does) · [How it works](#how-it-works) · [AI agent](#the-ai-agent) · [Ingredient analysis](#ingredient-analysis) · [API](#api) · [Design decisions](#design-decisions) · [Data](#data-sources) · [Screens](#screens) · [Quick start](#quick-start) · [Tests](#testing-and-ci) · [Structure](#project-structure) · [Limitations](#known-limitations) · [Roadmap](#roadmap)
+**Contents:** [What it does](#what-it-does) · [How it works](#how-it-works) · [AI agent](#the-ai-agent) · [Ingredient analysis](#ingredient-analysis) · [API](#api) · [Design decisions](#design-decisions) · [Data](#data-sources) · [Screens](#screens) · [Quick start](#quick-start) · [Deploy](#deploy-one-service-free) · [Tests](#testing-and-ci) · [Structure](#project-structure) · [Tech stack](#tech-stack) · [Limitations](#known-limitations) · [Roadmap](#roadmap)
 
 ---
 
 ## What it does
 
-| Feature | What the user gets |
-|---|---|
-| 🔍 **Search** | Products in 4 languages, with filters: halal, vegan, gluten-free, lactose-free, bio |
-| 🧪 **Ingredient analysis** | Vegan, vegetarian, halal, gluten, lactose, palm-oil and allergen verdicts, computed from the real ingredient list |
-| 💰 **Price comparison** | The same product across stores, total price and price per 100 g/ml (live Migros prices today; more stores planned) |
-| 🛒 **Smart basket** | The cheapest mix across stores, or the cheapest single store, plus a nutrition summary and a PDF export |
-| 📷 **Barcode scan** | Scan a product (or type its GTIN) to open its page |
-| 💬 **Ask AI** | "Where is oat milk cheapest?", "Is Nutella halal?", "What's on sale?", answered from the database |
-| 📍 **Nearby stores** | Supermarkets around you (OpenStreetMap) |
-| 🌍 **4 languages, dark/light mode, dietary profile** | Saved on the device, with no account needed |
+Every feature links straight to that screen in the live app.
+
+| Feature | What the user gets | Try it |
+|---|---|---|
+| 🔍 **Search** | Products in 4 languages, with filters: halal, vegan, gluten-free, lactose-free, bio, protein, low sugar | [Search ↗](https://wisemarket-6ib3.onrender.com/search) |
+| 🧪 **Ingredient analysis** | Vegan, vegetarian, halal, gluten, lactose, palm-oil and allergen verdicts from the real ingredient list | [Nutella ↗](https://wisemarket-6ib3.onrender.com/product/3017620422003) |
+| 💰 **Price comparison** | The same product across stores, total price and price per 100 g/ml | [Whole Milk ↗](https://wisemarket-6ib3.onrender.com/product/7610000100001) |
+| 🛒 **Smart basket** | Cheapest mix across stores or cheapest single store, savings, budget, nutrition summary, **PDF shopping list** | [Basket ↗](https://wisemarket-6ib3.onrender.com/basket) |
+| 📷 **Barcode scan** | Scan with the camera, or type the number under the barcode | [Scan ↗](https://wisemarket-6ib3.onrender.com/scan) |
+| 💬 **Ask AI** | "Where is oat milk cheapest?", "Is Nutella halal?", "What's on sale?", answered from the database, in your language | [Chat ↗](https://wisemarket-6ib3.onrender.com/chat) |
+| 🔥 **Deals and seasonal produce** | Current promotions, Swiss produce in season, a dinner idea with recipe | [Home ↗](https://wisemarket-6ib3.onrender.com/) |
+| 📍 **Nearby stores** | Migros, Coop, Aldi, Lidl and Denner within 2 km (OpenStreetMap) | [Stores ↗](https://wisemarket-6ib3.onrender.com/stores) |
+| ⚙️ **Personal settings** | 4 languages, dark/light mode, dietary profile that filters search; stored on the device, no account | [Settings ↗](https://wisemarket-6ib3.onrender.com/settings) |
+| 📖 **API docs** | Interactive OpenAPI documentation for every endpoint | [/api/docs ↗](https://wisemarket-6ib3.onrender.com/api/docs) |
 
 ---
 
@@ -211,12 +224,12 @@ Where a product exists in both sources, the app shows Migros prices **and** Open
 
 ## Screens
 
-| | | | |
-|:-:|:-:|:-:|:-:|
-| <img src="docs/screenshots/onboarding.png" width="180"><br>**Onboarding**, language choice | <img src="docs/screenshots/home.png" width="180"><br>**Home**, search, deals, dinner idea | <img src="docs/screenshots/search-vegan-filter.png" width="180"><br>**Search**, vegan filter on | <img src="docs/screenshots/product-analysis.png" width="180"><br>**Product**, verdicts, allergens, palm oil |
-| <img src="docs/screenshots/price-comparison.png" width="180"><br>**Price comparison** across 3 stores | <img src="docs/screenshots/basket.png" width="180"><br>**Basket**, cheapest mix and savings | <img src="docs/screenshots/scan.png" width="180"><br>**Scan**, camera or GTIN | <img src="docs/screenshots/settings.png" width="180"><br>**Settings**, language, theme, diet |
+| | | | | |
+|:-:|:-:|:-:|:-:|:-:|
+| <img src="docs/screenshots/onboarding.png" width="150"><br>**Onboarding** | <img src="docs/screenshots/home.png" width="150"><br>**Home** | <img src="docs/screenshots/search-vegan-filter.png" width="150"><br>**Search**, vegan filter | <img src="docs/screenshots/product-analysis.png" width="150"><br>**Product analysis** | <img src="docs/screenshots/price-comparison.png" width="150"><br>**Price comparison** |
+| <img src="docs/screenshots/basket.png" width="150"><br>**Basket**, cheapest mix | <img src="docs/screenshots/scan.png" width="150"><br>**Scan** | <img src="docs/screenshots/chat.png" width="150"><br>**Ask AI** | <img src="docs/screenshots/settings.png" width="150"><br>**Settings** | <img src="docs/screenshots/profile.png" width="150"><br>**Profile** |
 
-Screenshots were taken from the running app on the test dataset (seed prices for Migros, Coop and Aldi, plus real Open Food Facts products). A page-by-page description is in [docs/APP_GUIDE.md](docs/APP_GUIDE.md).
+Screenshots come from the production build (the same Docker image that runs live), with the test dataset: seed prices for Migros, Coop and Aldi, plus real Open Food Facts products. A page-by-page description is in [docs/APP_GUIDE.md](docs/APP_GUIDE.md).
 
 ---
 
@@ -264,6 +277,8 @@ python scripts/recompute_tags.py               # preview; add --apply to write
 
 ### Deploy (one service, free)
 
+**Running live at [https://wisemarket-6ib3.onrender.com](https://wisemarket-6ib3.onrender.com)**: Render builds the `Dockerfile` on every push to `main` and switches over when the health check passes.
+
 The `Dockerfile` builds the React app and serves it together with the API from one container: the app at `/`, the API at `/api`. There is one URL and no CORS setup.
 
 1. On [render.com](https://render.com): **New → Blueprint** → connect this repository (it reads `render.yaml`).
@@ -287,7 +302,7 @@ uvicorn backend.api.serve:app --port 8000      # app + API on http://localhost:8
 
 | Suite | Command | Tests |
 |---|---|---|
-| Logic (no database) | `pytest -m "not integration"` | 193 |
+| Logic (no database) | `pytest -m "not integration"` | 196 |
 | Integration (real API + Postgres) | `pytest -m integration` | 44 |
 | Frontend | `npm run lint && npm run build` | ESLint + Vite build |
 
@@ -313,7 +328,7 @@ wisemarket/
 ├── data/ontology/      67 multilingual CSV word lists (en/de/fr/it)
 ├── frontend/wisemarket React 19 + Vite PWA
 ├── scripts/            recompute_tags.py, check_connection.py
-├── tests/              237 tests (logic + integration)
+├── tests/              240 tests (logic + integration)
 ├── docs/               APP_GUIDE.md, BUILD_LOG.md, screenshots/
 ├── Dockerfile          builds the app and the API into one container
 └── render.yaml         one-click deploy on Render
@@ -321,14 +336,18 @@ wisemarket/
 
 ### Tech stack
 
-| Layer | Technology |
+| Area | Tools |
 |---|---|
-| Frontend | React 19, Vite 8, React Router 7, Tailwind CSS 4, ZXing (barcodes), Web Speech API |
-| Backend | FastAPI, Pydantic, slowapi (rate limiting), Sentry (optional) |
-| AI | LiteLLM → Groq (`llama-3.1-8b-instant`, `llama-3.3-70b-versatile`) |
-| Data | Supabase Postgres, PostgREST, SQL migrations |
-| ETL | Playwright (Migros), Open Food Facts API, GTIN merge |
-| Quality | pytest (237 tests), ESLint, GitHub Actions with a local Supabase |
+| **Frontend** | React 19 · Vite 8 · React Router 7 · Tailwind CSS 4 · Framer Motion · Lucide icons · ZXing (barcode scanning) · Web Speech API (voice input) · Service Worker + Web App Manifest (installable PWA) |
+| **Backend** | Python 3.12 · FastAPI · Uvicorn · Pydantic · slowapi (rate limiting) · ReportLab + qrcode (PDF export) · Sentry (error tracking, optional) |
+| **AI** | LiteLLM · Groq (`llama-3.1-8b-instant` for intent, `llama-3.3-70b-versatile` for answers, automatic fallback) · intent → tool → answer agent design |
+| **Food analysis** | Rule-based NLP pipeline (parser, router, matcher, decision engine) · 67 multilingual ontology files (EN/DE/FR/IT) |
+| **Data** | Supabase · PostgreSQL · PostgREST · SQL migrations · Row Level Security |
+| **Data engineering** | Playwright (Migros scraper) · Open Food Facts API · GTIN-based merge with source tracking · idempotent backfill scripts |
+| **Deployment** | Docker (multi-stage build: Node → Python) · Render (Blueprint, Frankfurt, auto-deploy on push) · health checks |
+| **Quality** | pytest (240 tests: 196 logic, 44 integration) · ESLint · GitHub Actions CI · Supabase CLI (fresh database in CI) |
+| **Developer tools** | Git · GitHub · GitHub Codespaces · VS Code · Mermaid (diagrams) |
+| **External APIs** | Groq · Open Food Facts · OpenStreetMap Overpass |
 
 ---
 
@@ -338,8 +357,10 @@ wisemarket/
 - **Migros products have no ingredients of their own.** Only the ~630 products matched with Open Food Facts get a full analysis. For the others, the app shows only what the name proves: "Butter Cookies" is *not vegan*, "glutenfrei" is *gluten-free*, and everything else stays *unknown*, with no badge, rather than guessed.
 - **Halal is ingredient-based, not a certification.** The app flags pork, alcohol and unlabelled meat or gelatine; it cannot verify slaughter or certification.
 - **Only English, German, French and Italian labels are analysed.** Other languages are left untagged.
-- **354 tag changes are held for review** (the "loosening" changes from the backfill); those products keep their stricter tags until reviewed.
-- **Nearby stores** depend on the public Overpass API and show nothing when it is unreachable.
+- **Some tag changes are held for review** (the "loosening" changes from the backfill); those products keep their stricter tags until reviewed.
+- **Nearby stores** depend on the free public OpenStreetMap servers. The app tries three of them, but when all are busy it asks you to try again later.
+- **Prices for Coop, Aldi and Lidl are sample data** for now; live prices come from Migros.
+- **Free hosting sleeps** after 15 minutes without visitors, so the first request then takes up to a minute.
 
 ---
 
@@ -355,7 +376,7 @@ wisemarket/
 
 ## Author
 
-**Abdulbari Soliman**, AI · Data Analytics · Data Infrastructure
+**Abdulbari Soliman**, AI & Data Engineer: end-to-end AI products, from data to deployed app
 [GitHub](https://github.com/AbdulbariSoliman) · [LinkedIn](https://www.linkedin.com/in/abdulbari-soilman/)
 
 Licensed under the [MIT License](LICENSE).

@@ -70,6 +70,9 @@ def map_category(raw):
     if any(x in r for x in ["oat","hafer","avoine","soja","soy","amande","mandel",
                               "coco","kokos","riz","reis","hemp","chanvre"]) and        any(x in r for x in ["drink","boisson","lait","milk","milch"]):
         return "dairy_alternative"
+    # Eggs ("chicken-eggs" must not end up under meat)
+    if any(x in r for x in ["egg", "oeuf", "œuf", "eier", "uova"]):
+        return "dairy"
     # Meat
     if any(x in r for x in ["viande","fleisch","meat","bœuf","rind","beef",
                               "porc","schwein","pork","poulet","huhn","chicken",

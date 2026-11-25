@@ -27,8 +27,6 @@ def _detect_root() -> Path:
 ROOT_DIR: Path = _detect_root()
 DATA_DIR: Path = ROOT_DIR / "data"
 ONTOLOGY_DIR: Path = DATA_DIR / "ontology"
-PRODUCTS_BY_STORE_DIR: Path = DATA_DIR / "products_by_store"
-PRICES_BY_STORE_DIR: Path = DATA_DIR / "prices_by_store"
 ENV_FILE: Path = ROOT_DIR / ".env"
 
 # String forms for APIs that don't accept Path
