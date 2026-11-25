@@ -87,6 +87,10 @@ def main() -> None:
                 if source == "ingredients":
                     new = tags_from_ingredients(row.get("ingredients_raw") or "", row.get("category"),
                                                 row.get("name_en"))
+                    if new is None:
+                        # Ingredients in a language we can't read: judge by the
+                        # name only, so old "safe" guesses become "unknown"
+                        new = tags_from_name(name, row.get("category"))
                 else:
                     new = tags_from_name(name, row.get("category"))
                 if not new:
@@ -138,8 +142,8 @@ def show(sb, gtins) -> None:
         seen.add(row["gtin"])
         old = row.get("ontology_tags") or {}
         if row.get("ingredients_raw"):
-            new = tags_from_ingredients(row["ingredients_raw"], row.get("category"),
-                                        row.get("name_en")) or {}
+            new = tags_from_ingredients(row["ingredients_raw"], row.get("category"), row.get("name_en")) \
+                or tags_from_name(row.get("name_de") or row.get("name_en"), row.get("category"))
         else:
             new = tags_from_name(row.get("name_de") or row.get("name_en"), row.get("category"))
         print(f"\n{row['gtin']}  {row.get('name_en')}  [{row.get('category')}]")

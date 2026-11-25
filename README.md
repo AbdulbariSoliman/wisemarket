@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="https://github.com/AbdulbariSoliman/wisemarket/actions/workflows/ci.yml"><img src="https://github.com/AbdulbariSoliman/wisemarket/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <img src="https://img.shields.io/badge/tests-240-brightgreen" alt="240 tests">
+  <img src="https://img.shields.io/badge/tests-244-brightgreen" alt="244 tests">
   <img src="https://img.shields.io/badge/Python-3.11–3.13-3776AB?logo=python&logoColor=white" alt="Python">
   <img src="https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white" alt="FastAPI">
   <img src="https://img.shields.io/badge/React_19-61DAFB?logo=react&logoColor=black" alt="React">
@@ -34,7 +34,7 @@ Search or scan a product, compare its price across stores, see at a glance wheth
 - 🎯 **Measured accuracy.** False "vegan" claims fell from 19 to 0 on 100 real products, and 7,255 products were corrected in the live catalogue.
 - 🤖 **AI agent grounded in data.** The LLM detects intent and writes the answer, but every price and product comes from Postgres.
 - 🛡️ **Safety first.** Automated re-tagging can only make a tag stricter; "this is safe" changes go to human review.
-- ✅ **Tested and shipped.** 240 tests, CI with integration tests against a fresh Supabase instance on every push, and a Docker deployment that goes live automatically.
+- ✅ **Tested and shipped.** 244 tests, CI with integration tests against a fresh Supabase instance on every push, and a Docker deployment that goes live automatically.
 
 ---
 
@@ -302,7 +302,7 @@ uvicorn backend.api.serve:app --port 8000      # app + API on http://localhost:8
 
 | Suite | Command | Tests |
 |---|---|---|
-| Logic (no database) | `pytest -m "not integration"` | 196 |
+| Logic (no database) | `pytest -m "not integration"` | 200 |
 | Integration (real API + Postgres) | `pytest -m integration` | 44 |
 | Frontend | `npm run lint && npm run build` | ESLint + Vite build |
 
@@ -328,7 +328,7 @@ wisemarket/
 ├── data/ontology/      67 multilingual CSV word lists (en/de/fr/it)
 ├── frontend/wisemarket React 19 + Vite PWA
 ├── scripts/            recompute_tags.py, check_connection.py
-├── tests/              240 tests (logic + integration)
+├── tests/              244 tests (logic + integration)
 ├── docs/               APP_GUIDE.md, BUILD_LOG.md, screenshots/
 ├── Dockerfile          builds the app and the API into one container
 └── render.yaml         one-click deploy on Render
@@ -345,7 +345,7 @@ wisemarket/
 | **Data** | Supabase · PostgreSQL · PostgREST · SQL migrations · Row Level Security |
 | **Data engineering** | Playwright (Migros scraper) · Open Food Facts API · GTIN-based merge with source tracking · idempotent backfill scripts |
 | **Deployment** | Docker (multi-stage build: Node → Python) · Render (Blueprint, Frankfurt, auto-deploy on push) · health checks |
-| **Quality** | pytest (240 tests: 196 logic, 44 integration) · ESLint · GitHub Actions CI · Supabase CLI (fresh database in CI) |
+| **Quality** | pytest (244 tests: 200 logic, 44 integration) · ESLint · GitHub Actions CI · Supabase CLI (fresh database in CI) |
 | **Developer tools** | Git · GitHub · GitHub Codespaces · VS Code · Mermaid (diagrams) |
 | **External APIs** | Groq · Open Food Facts · OpenStreetMap Overpass |
 

@@ -32,7 +32,9 @@ _DAIRY_WORDS = (
 
 _ALCOHOL_NAME = re.compile(
     r"\b(bier|beer|bière|biere|birra|lager|wein|wine|vin|vino|prosecco|champagne|"
-    r"cidre|cider|sidro|whisky|whiskey|vodka|rum|rhum|gin|likör|liqueur|liquore)\b")
+    r"cidre|cider|sidro|whisky|whiskey|vodka|rum|rhum|gin|likör|liqueur|liquore)\b"
+    # German compounds: Weissbier, Lagerbier, Rotwein, Weisswein (but not Schwein)
+    r"|\w+bier\b|\w+(?<!sch)wein\b")
 _ALCOHOL_FREE_NAME = re.compile(
     r"alkoholfrei|sans alcool|alcohol[- ]free|non[- ]alcoholic|analcolic|senza alcol|"
     r"\b0[.,]0\b|ginger|ingwer|root beer")

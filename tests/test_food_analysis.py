@@ -359,3 +359,15 @@ def test_eggs_filed_under_meat_are_still_vegetarian(category):
         tags = tags_from_name(name, category)
         assert tags["vegan"] is False
         assert tags["vegetarian"] is not False and tags["halal"] is not False
+
+
+@pytest.mark.parametrize("name", ["Paulaner Weissbier", "Feldschlösschen Lagerbier", "Rotwein Merlot"])
+def test_compound_beer_and_wine_names_are_not_halal(name):
+    from backend.services.product_tags import tags_from_ingredients, tags_from_name
+    assert tags_from_name(name, "beverages")["halal"] is False
+    assert tags_from_ingredients("Wasser, Gerstenmalz, Hopfen, Hefe", "beverages", name)["halal"] is False
+
+
+def test_schwein_is_not_wine():
+    from backend.services.product_tags import _ALCOHOL_NAME
+    assert not _ALCOHOL_NAME.search("schweinsbratwurst")
